@@ -18,7 +18,7 @@ from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events.event import Event
 from google.genai import types
 from simplegmail.message import Message
-from .gmail_client import get_unread_emails
+from ..gmail_client import get_unread_emails
 
 
 class EmailCollector(BaseAgent):
