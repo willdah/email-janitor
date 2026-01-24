@@ -1,4 +1,4 @@
-from .email_collector import email_collector
+from .sub_agents.email_collector import email_collector
 from google.adk.agents.sequential_agent import SequentialAgent
 
 
