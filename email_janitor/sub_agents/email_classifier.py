@@ -2,7 +2,7 @@
 EmailClassifier - A Custom Agent for classifying emails.
 
 This agent retrieves emails from EmailCollector's agent_states and classifies
-each email into categories: spam, important, or not important.
+each email into categories: ACTIONABLE, INFORMATIONAL, PROMOTIONAL, or NOISE.
 """
 
 import json
@@ -21,8 +21,8 @@ class EmailClassifier(BaseAgent):
     A Custom Agent that classifies emails into categories.
     
     This agent retrieves emails from EmailCollector's agent_states and uses
-    an LLM sub-agent to classify each email into one of three categories:
-    spam, important, or not important.
+    an LLM sub-agent to classify each email into one of four categories:
+    ACTIONABLE, INFORMATIONAL, PROMOTIONAL, or NOISE.
     """
     
     def __init__(
@@ -39,24 +39,30 @@ class EmailClassifier(BaseAgent):
             description: Optional description of the agent
             model: Optional LLM model to use (default: LiteLlm with llama3.1:8b)
         """
-        default_description = "An agent that classifies emails into categories: spam, important, or not important."
+        default_description = "An agent that classifies emails into categories: ACTIONABLE, INFORMATIONAL, PROMOTIONAL, or NOISE."
         super().__init__(
             name=name,
             description=description or default_description,
         )
         
         # Create an LLM sub-agent for classification
+        # TODO: Move instruction to a separate file and load it from there.
         self._classifier_llm = Agent(
             model=model or LiteLlm(model="ollama_chat/llama3.1:8b"),
             name="EmailClassificationLLM",
             description="Classifies a single email into a category.",
             instruction=(
-                "You are an email classifier. You are given an email and you need to classify it "
-                "into one of these categories: 'spam', 'important', or 'not important'. "
-                "Respond with only the category name (one word)."
+                "Role: You are an expert Email Triage Assistant. Your goal is to analyze the content of an incoming email and classify it into one of four specific buckets based on intent and urgency.\n\n"
+                "Categories:\n\n"
+                "    ACTIONABLE: Direct correspondence from humans, invoices, bills, travel confirmations, or time-sensitive alerts requiring a response or task.\n\n"
+                "    INFORMATIONAL: Subscribed newsletters, industry updates, or general \"read later\" content. These usually contain an \"Unsubscribe\" link but are from brands the user trusts.\n\n"
+                "    PROMOTIONAL: Marketing emails, sales, coupons, and \"Limited Time\" offers.\n\n"
+                "    NOISE: Unsolicited spam, repetitive low-value system pings, or suspicious \"phishing\" content.\n\n"
+                "Instruction: Analyze the Subject and Body of the email provided. Respond ONLY with a JSON object containing the \"category\" and a brief \"reasoning\"."
             ),
         )
     
+    # TODO: Use Pydantic models for outputs.
     async def _run_async_impl(
         self, ctx: InvocationContext
     ) -> AsyncGenerator[Event, None]:
@@ -104,10 +110,17 @@ class EmailClassifier(BaseAgent):
         
         # Classify each email
         classifications = []
-        for i, email in enumerate(emails, 1):
+        for i, email in enumerate[Message](emails, 1):
             # Prepare email content for classification
+            # Include Subject and Body as requested by the instruction
             email_text = f"From: {email.sender}\nSubject: {email.subject}\n"
-            if email.snippet:
+            
+            # Include body if available (prefer plain text, fallback to snippet)
+            if email.plain:
+                # Truncate body if too long (keep first 2000 chars for classification)
+                body = email.plain[:2000] + "..." if len(email.plain) > 2000 else email.plain
+                email_text += f"Body: {body}\n"
+            elif email.snippet:
                 email_text += f"Snippet: {email.snippet}\n"
             
             # Create a context for the LLM sub-agent with the email as user content
@@ -120,26 +133,56 @@ class EmailClassifier(BaseAgent):
             
             # Get classification from LLM sub-agent
             classification_result = None
+            reasoning = None
             async for event in self._classifier_llm.run_async(classification_ctx):
                 # Extract the classification from the final response
                 if event.is_final_response() and event.content:
                     parts = event.content.parts if event.content.parts else []
                     if parts and parts[0].text:
-                        classification_result = parts[0].text.strip().lower()
-                        # Normalize to one of the expected categories
-                        if "spam" in classification_result:
-                            classification_result = "spam"
-                        elif "important" in classification_result:
-                            classification_result = "important"
-                        else:
-                            classification_result = "not important"
+                        response_text = parts[0].text.strip()
+                        
+                        # Try to parse JSON response
+                        try:
+                            # Extract JSON from response (might be wrapped in markdown code blocks)
+                            json_text = response_text
+                            if "```json" in json_text:
+                                json_text = json_text.split("```json")[1].split("```")[0].strip()
+                            elif "```" in json_text:
+                                json_text = json_text.split("```")[1].split("```")[0].strip()
+                            
+                            classification_data = json.loads(json_text)
+                            classification_result = classification_data.get("category", "").upper()
+                            reasoning = classification_data.get("reasoning", "")
+                        except (json.JSONDecodeError, KeyError, AttributeError):
+                            # Fallback: try to extract category from plain text
+                            response_upper = response_text.upper()
+                            if "ACTIONABLE" in response_upper:
+                                classification_result = "ACTIONABLE"
+                            elif "INFORMATIONAL" in response_upper:
+                                classification_result = "INFORMATIONAL"
+                            elif "PROMOTIONAL" in response_upper:
+                                classification_result = "PROMOTIONAL"
+                            elif "NOISE" in response_upper:
+                                classification_result = "NOISE"
+                            else:
+                                # Default fallback
+                                classification_result = "NOISE"
+                                reasoning = "Unable to parse classification response"
+            
+            # Normalize category to one of the expected values
+            valid_categories = {"ACTIONABLE", "INFORMATIONAL", "PROMOTIONAL", "NOISE"}
+            if classification_result not in valid_categories:
+                classification_result = "NOISE"
+                if not reasoning:
+                    reasoning = f"Invalid category '{classification_result}', defaulting to NOISE"
             
             # Store classification result
             classifications.append({
                 "email_id": email.id,
                 "sender": email.sender,
                 "subject": email.subject,
-                "classification": classification_result or "not important",
+                "classification": classification_result or "NOISE",
+                "reasoning": reasoning or "No reasoning provided",
             })
         
         # Store classifications in agent_states
