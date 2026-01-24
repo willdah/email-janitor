@@ -11,11 +11,13 @@ This is a deterministic agent that always fetches unread emails when called,
 without using an LLM for decision-making.
 """
 
+import json
 from typing import AsyncGenerator
 from google.adk.agents.base_agent import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events.event import Event
 from google.genai import types
+from simplegmail.message import Message
 from .gmail_client import get_unread_emails
 
 
@@ -56,38 +58,64 @@ class EmailCollector(BaseAgent):
         Custom execution logic for the EmailCollector agent.
         
         This method deterministically fetches unread emails by directly calling
-        the email client function and formats the results as an event.
+        the email client function. The Message objects are preserved in agent_states
+        for programmatic access, while a serialized dictionary is provided in the event.
         
         Args:
             ctx: The invocation context containing session state and user input
             
         Yields:
-            Event containing the fetched unread emails
+            Event containing a dictionary summary of the fetched unread emails.
+            
+        Note:
+            The Message objects are stored in ctx.agent_states[self.name]["emails"].
+            This agent_states dictionary is shared across all agents in the same invocation,
+            so other agents can access the emails via:
+            `ctx.agent_states["EmailCollector"]["emails"]`
         """
         # Directly fetch unread emails (deterministic, no LLM)
-        emails = get_unread_emails()
+        emails: list[Message] = get_unread_emails()
         
-        # Format the email results as text
-        if not emails:
-            email_text = "No unread emails found."
-        else:
-            email_lines = [f"Found {len(emails)} unread email(s):\n"]
-            for i, email in enumerate(emails, 1):
-                email_lines.append(f"{i}. From: {email.sender}")
-                email_lines.append(f"   Subject: {email.subject}")
-                email_lines.append(f"   Date: {email.date}")
-                if email.snippet:
-                    email_lines.append(f"   Snippet: {email.snippet[:100]}...")
-                email_lines.append("")
-            email_text = "\n".join(email_lines)
+        # Store the Message objects in agent_states for programmatic access
+        ctx.agent_states[self.name] = {
+            "emails": emails,  # Preserve the original Message objects
+            "count": len(emails),
+        }
         
-        # Create an event with the email results
+        # Convert emails to a dictionary structure for serialization/display
+        emails_dict = {
+            "count": len(emails),
+            "emails": []
+        }
+        for email in emails:
+            labels = []
+            # Handle label_ids - they might be strings or Label objects
+            for label_id in email.label_ids:
+                if hasattr(label_id, 'name'):
+                    labels.append(label_id.name)
+                else:
+                    labels.append(str(label_id))
+
+            emails_dict["emails"].append({
+                "id": email.id,
+                "sender": email.sender,
+                "recipient": email.recipient,
+                "subject": email.subject,
+                "date": email.date,
+                "snippet": email.snippet,
+                "thread_id": email.thread_id,
+                "labels": labels,
+            })
+        
+        # Create an event with the email results as JSON in content
+        # The Message objects are preserved in ctx.agent_states[self.name]["emails"]
+        # for programmatic access by other agents or code
         event = Event(
             invocation_id=ctx.invocation_id,
             author=self.name,
             branch=ctx.branch,
             content=types.Content(
-                parts=[types.Part(text=email_text)]
+                parts=[types.Part(text=json.dumps(emails_dict, indent=2))]
             ),
         )
         
