@@ -11,7 +11,6 @@ This is a deterministic agent that always fetches unread emails when called,
 without using an LLM for decision-making.
 """
 
-import json
 from typing import AsyncGenerator
 from google.adk.agents.base_agent import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
@@ -19,6 +18,7 @@ from google.adk.events.event import Event
 from google.genai import types
 from simplegmail.message import Message
 from ..tools.gmail_client import get_unread_emails
+from ..models.schemas import EmailData, EmailCollectionOutput
 
 
 class EmailCollector(BaseAgent):
@@ -76,17 +76,8 @@ class EmailCollector(BaseAgent):
         # Directly fetch unread emails (deterministic, no LLM)
         emails: list[Message] = get_unread_emails()
         
-        # Store the Message objects in agent_states for programmatic access
-        ctx.agent_states[self.name] = {
-            "emails": emails,  # Preserve the original Message objects
-            "count": len(emails),
-        }
-        
-        # Convert emails to a dictionary structure for serialization/display
-        emails_dict = {
-            "count": len(emails),
-            "emails": []
-        }
+        # Convert emails to Pydantic EmailData models
+        email_data_list = []
         for email in emails:
             labels = []
             # Handle label_ids - they might be strings or Label objects
@@ -96,18 +87,31 @@ class EmailCollector(BaseAgent):
                 else:
                     labels.append(str(label_id))
 
-            emails_dict["emails"].append({
-                "id": email.id,
-                "sender": email.sender,
-                "recipient": email.recipient,
-                "subject": email.subject,
-                "date": email.date,
-                "snippet": email.snippet,
-                "thread_id": email.thread_id,
-                "labels": labels,
-            })
+            email_data_list.append(EmailData(
+                id=email.id,
+                sender=email.sender,
+                recipient=email.recipient,
+                subject=email.subject,
+                date=email.date,
+                snippet=email.snippet,
+                thread_id=email.thread_id,
+                labels=labels,
+            ))
         
-        # Create an event with the email results as JSON in content
+        # Create structured output using Pydantic model
+        collection_output = EmailCollectionOutput(
+            count=len(emails),
+            emails=email_data_list,
+        )
+        
+        # Store the Message objects in agent_states for accessing full email body
+        # Also store the structured output for type-safe access
+        ctx.agent_states[self.name] = {
+            "emails": emails,  # Preserve the original Message objects for accessing full body
+            "collection_output": collection_output,  # Structured Pydantic model
+        }
+        
+        # Create an event with the structured output as JSON
         # The Message objects are preserved in ctx.agent_states[self.name]["emails"]
         # for programmatic access by other agents or code
         event = Event(
@@ -115,7 +119,7 @@ class EmailCollector(BaseAgent):
             author=self.name,
             branch=ctx.branch,
             content=types.Content(
-                parts=[types.Part(text=json.dumps(emails_dict, indent=2))]
+                parts=[types.Part(text=collection_output.model_dump_json(indent=2))]
             ),
         )
         

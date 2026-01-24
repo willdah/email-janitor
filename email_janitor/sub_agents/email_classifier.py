@@ -14,6 +14,14 @@ from google.adk.events.event import Event
 from google.adk.models.lite_llm import LiteLlm
 from google.genai import types
 from simplegmail.message import Message
+from ..models.schemas import (
+    EmailCollectionOutput,
+    EmailClassificationInput,
+    EmailClassificationOutput,
+    ClassificationResult,
+    ClassificationCollectionOutput,
+    EmailCategory,
+)
 
 
 class EmailClassifier(BaseAgent):
@@ -45,7 +53,7 @@ class EmailClassifier(BaseAgent):
             description=description or default_description,
         )
         
-        # Create an LLM sub-agent for classification
+        # Create an LLM sub-agent for classification with structured input/output schemas
         # TODO: Move instruction to a separate file and load it from there.
         self._classifier_llm = Agent(
             model=model or LiteLlm(model="ollama_chat/llama3.1:8b"),
@@ -86,17 +94,15 @@ Role: You are a Context-Aware Email Triage Agent. You categorize emails the user
 
         Stay Grounded: Only use the names and themes present in the text.
 
-        Format: Respond ONLY with valid JSON.
-
-        Example output:
-        {
-            "category": "CATEGORY_NAME",
-            "reasoning": "A 1-sentence explanation citing the specific keywords found."
-        }
-"""
+        You must respond with a JSON object matching the output schema with "category" and "reasoning" fields.
+        The category must be one of: ACTIONABLE, INFORMATIONAL, PROMOTIONAL, or NOISE.
+        The reasoning must be a 1-sentence explanation citing the specific keywords found.
+""",
+            input_schema=EmailClassificationInput,
+            output_schema=EmailClassificationOutput,
+            output_key="email_classification",
         )
     
-    # TODO: Use Pydantic models for outputs.
     async def _run_async_impl(
         self, ctx: InvocationContext
     ) -> AsyncGenerator[Event, None]:
@@ -114,7 +120,7 @@ Role: You are a Context-Aware Email Triage Agent. You categorize emails the user
         """
         # Retrieve emails from EmailCollector's agent_states
         collector_state = ctx.agent_states.get("EmailCollector")
-        if not collector_state or "emails" not in collector_state:
+        if not collector_state:
             # No emails to classify
             event = Event(
                 invocation_id=ctx.invocation_id,
@@ -127,9 +133,22 @@ Role: You are a Context-Aware Email Triage Agent. You categorize emails the user
             yield event
             return
         
-        emails: list[Message] = collector_state["emails"]
+        # Get structured output from EmailCollector
+        collection_output: EmailCollectionOutput | None = collector_state.get("collection_output")
+        if not collection_output:
+            event = Event(
+                invocation_id=ctx.invocation_id,
+                author=self.name,
+                branch=ctx.branch,
+                content=types.Content(
+                    parts=[types.Part(text="No email collection output found. EmailCollector must provide structured output.")]
+                ),
+            )
+            yield event
+            return
         
-        if not emails:
+        email_data_list = collection_output.emails
+        if not email_data_list:
             # Empty email list
             event = Event(
                 invocation_id=ctx.invocation_id,
@@ -142,37 +161,45 @@ Role: You are a Context-Aware Email Triage Agent. You categorize emails the user
             yield event
             return
         
+        # Create a mapping from email_id to Message object for accessing full body
+        emails: list[Message] = collector_state.get("emails", [])
+        email_map: dict[str, Message] = {email.id: email for email in emails} if emails else {}
+        
         # Classify each email
-        classifications = []
-        for i, email in enumerate[Message](emails, 1):
-            # Prepare email content for classification
-            # Include Subject and Body as requested by the instruction
-            email_text = (
-                "--- BEGIN EMAIL DATA ---\n"
-                f"SENDER: {email.sender}\n"
-                f"SUBJECT: {email.subject}\n"
+        classification_results = []
+        for email_data in email_data_list:
+            # Prepare structured input for LLM sub-agent
+            # Try to get full body from Message object if available
+            body = None
+            message = email_map.get(email_data.id)
+            if message and hasattr(message, 'plain') and message.plain:
+                # Truncate body if too long (keep first 2000 chars for classification)
+                body = message.plain[:2000] + "..." if len(message.plain) > 2000 else message.plain
+            elif email_data.snippet:
+                # Fall back to snippet if full body not available
+                body = email_data.snippet
+            
+            classification_input = EmailClassificationInput(
+                sender=email_data.sender,
+                subject=email_data.subject,
+                body=body,
+                snippet=email_data.snippet,
             )
             
-            # Include body if available (prefer plain text, fallback to snippet)
-            if email.plain:
-                # Truncate body if too long (keep first 2000 chars for classification)
-                body = email.plain[:2000] + "..." if len(email.plain) > 2000 else email.plain
-                email_text += f"BODY: {body}\n"
-            elif email.snippet:
-                email_text += f"SNIPPET: {email.snippet}\n"
-            email_text += "--- END EMAIL DATA ---"
-            
-            # Create a context for the LLM sub-agent with the email as user content
-            # Use model_copy to create a new context with updated user_content
+            # Create a context for the LLM sub-agent with structured JSON input
+            # The input_schema requires JSON string conforming to EmailClassificationInput
+            # The output_schema ensures the response conforms to EmailClassificationOutput
+            # The output_key="email_classification" automatically stores the result in session.state["email_classification"]
             classification_ctx = ctx.model_copy(update={
                 'user_content': types.Content(
-                    parts=[types.Part(text=f"Classify this email:\n\n{email_text}")]
+                    parts=[types.Part(text=classification_input.model_dump_json())]
                 ),
             })
             
             # Get classification from LLM sub-agent
-            classification_result = None
-            reasoning = None
+            # Note: The result is also automatically stored in session.state["email_classification"] 
+            # due to output_key being set, but we read from events here for immediate processing
+            classification_output: EmailClassificationOutput | None = None
             async for event in self._classifier_llm.run_async(classification_ctx):
                 # Extract the classification from the final response
                 if event.is_final_response() and event.content:
@@ -180,68 +207,69 @@ Role: You are a Context-Aware Email Triage Agent. You categorize emails the user
                     if parts and parts[0].text:
                         response_text = parts[0].text.strip()
                         
-                        # Try to parse JSON response
+                        # Parse structured output
                         try:
-                            # Extract JSON from response (might be wrapped in markdown code blocks)
+                            # The output_schema ensures JSON format, but might be wrapped
                             json_text = response_text
                             if "```json" in json_text:
                                 json_text = json_text.split("```json")[1].split("```")[0].strip()
                             elif "```" in json_text:
                                 json_text = json_text.split("```")[1].split("```")[0].strip()
                             
-                            classification_data = json.loads(json_text)
-                            classification_result = classification_data.get("category", "").upper()
-                            reasoning = classification_data.get("reasoning", "")
-                        except (json.JSONDecodeError, KeyError, AttributeError):
+                            # Parse and validate using Pydantic model
+                            classification_output = EmailClassificationOutput.model_validate_json(json_text)
+                        except (json.JSONDecodeError, ValueError) as e:
                             # Fallback: try to extract category from plain text
                             response_upper = response_text.upper()
+                            category_str = "NOISE"
                             if "ACTIONABLE" in response_upper:
-                                classification_result = "ACTIONABLE"
+                                category_str = "ACTIONABLE"
                             elif "INFORMATIONAL" in response_upper:
-                                classification_result = "INFORMATIONAL"
+                                category_str = "INFORMATIONAL"
                             elif "PROMOTIONAL" in response_upper:
-                                classification_result = "PROMOTIONAL"
-                            elif "NOISE" in response_upper:
-                                classification_result = "NOISE"
-                            else:
-                                # Default fallback
-                                classification_result = "NOISE"
-                                reasoning = "Unable to parse classification response"
+                                category_str = "PROMOTIONAL"
+                            
+                            # Create fallback output
+                            classification_output = EmailClassificationOutput(
+                                category=EmailCategory(category_str),
+                                reasoning=f"Unable to parse structured response: {str(e)}"
+                            )
             
-            # Normalize category to one of the expected values
-            valid_categories = {"ACTIONABLE", "INFORMATIONAL", "PROMOTIONAL", "NOISE"}
-            if classification_result not in valid_categories:
-                classification_result = "NOISE"
-                if not reasoning:
-                    reasoning = f"Invalid category '{classification_result}', defaulting to NOISE"
+            # Ensure we have a classification result
+            if not classification_output:
+                classification_output = EmailClassificationOutput(
+                    category=EmailCategory.NOISE,
+                    reasoning="No classification response received"
+                )
             
-            # Store classification result
-            classifications.append({
-                "email_id": email.id,
-                "sender": email.sender,
-                "subject": email.subject,
-                "classification": classification_result or "NOISE",
-                "reasoning": reasoning or "No reasoning provided",
-            })
+            # Create full classification result with email metadata
+            classification_result = ClassificationResult(
+                email_id=email_data.id,
+                sender=email_data.sender,
+                subject=email_data.subject,
+                classification=classification_output.category,
+                reasoning=classification_output.reasoning,
+            )
+            classification_results.append(classification_result)
+        
+        # Create structured output collection
+        collection_output = ClassificationCollectionOutput(
+            count=len(classification_results),
+            classifications=classification_results,
+        )
         
         # Store classifications in agent_states
         ctx.agent_states[self.name] = {
-            "classifications": classifications,
-            "count": len(classifications),
+            "collection_output": collection_output,
         }
         
-        # Create summary event
-        summary = {
-            "count": len(classifications),
-            "classifications": classifications,
-        }
-        
+        # Create event with structured output
         event = Event(
             invocation_id=ctx.invocation_id,
             author=self.name,
             branch=ctx.branch,
             content=types.Content(
-                parts=[types.Part(text=json.dumps(summary, indent=2))]
+                parts=[types.Part(text=collection_output.model_dump_json(indent=2))]
             ),
         )
         

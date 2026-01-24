@@ -14,6 +14,12 @@ from google.adk.events.event import Event
 from google.genai import types
 from simplegmail.message import Message
 from ..tools.gmail_client import apply_label_to_message
+from ..models.schemas import (
+    ClassificationCollectionOutput,
+    ProcessingResult,
+    ProcessingSummaryOutput,
+    EmailCategory,
+)
 
 
 class EmailProcessor(BaseAgent):
@@ -66,7 +72,7 @@ class EmailProcessor(BaseAgent):
         """
         # Retrieve classifications from EmailClassifier's agent_states
         classifier_state = ctx.agent_states.get("EmailClassifier")
-        if not classifier_state or "classifications" not in classifier_state:
+        if not classifier_state:
             # No classifications found
             event = Event(
                 invocation_id=ctx.invocation_id,
@@ -79,9 +85,22 @@ class EmailProcessor(BaseAgent):
             yield event
             return
         
-        classifications = classifier_state["classifications"]
+        # Get structured output from EmailClassifier
+        collection_output: ClassificationCollectionOutput | None = classifier_state.get("collection_output")
+        if not collection_output:
+            event = Event(
+                invocation_id=ctx.invocation_id,
+                author=self.name,
+                branch=ctx.branch,
+                content=types.Content(
+                    parts=[types.Part(text="No classification collection output found. EmailClassifier must provide structured output.")]
+                ),
+            )
+            yield event
+            return
         
-        if not classifications:
+        classification_results = collection_output.classifications
+        if not classification_results:
             # Empty classification list
             event = Event(
                 invocation_id=ctx.invocation_id,
@@ -124,12 +143,12 @@ class EmailProcessor(BaseAgent):
         }
         errors = []
         
-        for classification in classifications:
-            email_id = classification.get("email_id")
-            classification_category = classification.get("classification", "").upper()
+        for classification_result in classification_results:
+            email_id = classification_result.email_id
+            classification_category = classification_result.classification
             
             if not email_id:
-                errors.append(f"Classification missing email_id: {classification}")
+                errors.append(f"Classification missing email_id: {classification_result.model_dump()}")
                 continue
             
             # Find the corresponding Message object
@@ -140,94 +159,92 @@ class EmailProcessor(BaseAgent):
             
             # Apply label based on classification
             try:
-                if classification_category == "NOISE":
+                if classification_category == EmailCategory.NOISE:
                     apply_label_to_message(message, "Noise", remove_inbox=True)
                     label_counts["Noise"] += 1
-                    processing_results.append({
-                        "email_id": email_id,
-                        "sender": classification.get("sender", ""),
-                        "subject": classification.get("subject", ""),
-                        "classification": classification_category,
-                        "action": "Applied 'Noise' label and removed from inbox",
-                        "status": "success",
-                    })
-                elif classification_category == "PROMOTIONAL":
+                    processing_results.append(ProcessingResult(
+                        email_id=email_id,
+                        sender=classification_result.sender,
+                        subject=classification_result.subject,
+                        classification=classification_category,
+                        action="Applied 'Noise' label and removed from inbox",
+                        status="success",
+                    ))
+                elif classification_category == EmailCategory.PROMOTIONAL:
                     apply_label_to_message(message, "Promotions", remove_inbox=True)
                     label_counts["Promotions"] += 1
-                    processing_results.append({
-                        "email_id": email_id,
-                        "sender": classification.get("sender", ""),
-                        "subject": classification.get("subject", ""),
-                        "classification": classification_category,
-                        "action": "Applied 'Promotions' label and removed from inbox",
-                        "status": "success",
-                    })
-                elif classification_category == "INFORMATIONAL":
+                    processing_results.append(ProcessingResult(
+                        email_id=email_id,
+                        sender=classification_result.sender,
+                        subject=classification_result.subject,
+                        classification=classification_category,
+                        action="Applied 'Promotions' label and removed from inbox",
+                        status="success",
+                    ))
+                elif classification_category == EmailCategory.INFORMATIONAL:
                     apply_label_to_message(message, "Newsletters", remove_inbox=True)
                     label_counts["Newsletters"] += 1
-                    processing_results.append({
-                        "email_id": email_id,
-                        "sender": classification.get("sender", ""),
-                        "subject": classification.get("subject", ""),
-                        "classification": classification_category,
-                        "action": "Applied 'Newsletters' label and removed from inbox",
-                        "status": "success",
-                    })
-                elif classification_category == "ACTIONABLE":
+                    processing_results.append(ProcessingResult(
+                        email_id=email_id,
+                        sender=classification_result.sender,
+                        subject=classification_result.subject,
+                        classification=classification_category,
+                        action="Applied 'Newsletters' label and removed from inbox",
+                        status="success",
+                    ))
+                elif classification_category == EmailCategory.ACTIONABLE:
                     # No action required - leave in inbox
                     label_counts["ACTIONABLE"] += 1
-                    processing_results.append({
-                        "email_id": email_id,
-                        "sender": classification.get("sender", ""),
-                        "subject": classification.get("subject", ""),
-                        "classification": classification_category,
-                        "action": "No action - left in inbox",
-                        "status": "success",
-                    })
+                    processing_results.append(ProcessingResult(
+                        email_id=email_id,
+                        sender=classification_result.sender,
+                        subject=classification_result.subject,
+                        classification=classification_category,
+                        action="No action - left in inbox",
+                        status="success",
+                    ))
                 else:
                     errors.append(f"Unknown classification category: {classification_category} for email_id: {email_id}")
-                    processing_results.append({
-                        "email_id": email_id,
-                        "sender": classification.get("sender", ""),
-                        "subject": classification.get("subject", ""),
-                        "classification": classification_category,
-                        "action": "Unknown classification - no action taken",
-                        "status": "error",
-                    })
+                    processing_results.append(ProcessingResult(
+                        email_id=email_id,
+                        sender=classification_result.sender,
+                        subject=classification_result.subject,
+                        classification=classification_category,
+                        action="Unknown classification - no action taken",
+                        status="error",
+                    ))
             except Exception as e:
                 error_msg = f"Error processing email_id {email_id}: {str(e)}"
                 errors.append(error_msg)
-                processing_results.append({
-                    "email_id": email_id,
-                    "sender": classification.get("sender", ""),
-                    "subject": classification.get("subject", ""),
-                    "classification": classification_category,
-                    "action": f"Error: {str(e)}",
-                    "status": "error",
-                })
+                processing_results.append(ProcessingResult(
+                    email_id=email_id,
+                    sender=classification_result.sender,
+                    subject=classification_result.subject,
+                    classification=classification_category,
+                    action=f"Error: {str(e)}",
+                    status="error",
+                ))
+        
+        # Create structured output summary
+        summary_output = ProcessingSummaryOutput(
+            total_processed=len(processing_results),
+            label_counts=label_counts,
+            errors_count=len(errors),
+            errors=errors if errors else None,
+        )
         
         # Store processing results in agent_states
         ctx.agent_states[self.name] = {
-            "processing_results": processing_results,
-            "label_counts": label_counts,
-            "total_processed": len(processing_results),
-            "errors": errors,
+            "summary_output": summary_output,
         }
         
-        # Create summary event
-        summary = {
-            "total_processed": len(processing_results),
-            "label_counts": label_counts,
-            "errors_count": len(errors),
-            "errors": errors if errors else None,
-        }
-        
+        # Create event with structured output
         event = Event(
             invocation_id=ctx.invocation_id,
             author=self.name,
             branch=ctx.branch,
             content=types.Content(
-                parts=[types.Part(text=json.dumps(summary, indent=2))]
+                parts=[types.Part(text=summary_output.model_dump_json(indent=2))]
             ),
         )
         

@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "google-adk>=1.23.0",
     "litellm>=1.81.1",
+    "pydantic>=2.12.5",
     "simplegmail>=4.1.1",
 ]
 
