@@ -22,6 +22,3 @@ def get_unread_emails() -> list[Message]:
     gmail: Gmail = get_gmail_client()
     unread_emails: list[Message] = gmail.get_unread_messages()
     return unread_emails
-
-
-print(get_unread_emails())
