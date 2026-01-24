@@ -210,3 +210,9 @@ $RECYCLE.BIN/
 # Gmail Client
 client_secret.json
 gmail_token.json
+
+# Ruff
+.ruff_cache/
+
+# ADK
+.adk
