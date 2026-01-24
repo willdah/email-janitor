@@ -51,15 +51,49 @@ class EmailClassifier(BaseAgent):
             model=model or LiteLlm(model="ollama_chat/llama3.1:8b"),
             name="EmailClassificationLLM",
             description="Classifies a single email into a category.",
-            instruction=(
-                "Role: You are an expert Email Triage Assistant. Your goal is to analyze the content of an incoming email and classify it into one of four specific buckets based on intent and urgency.\n\n"
-                "Categories:\n\n"
-                "    ACTIONABLE: Direct correspondence from humans, invoices, bills, travel confirmations, or time-sensitive alerts requiring a response or task.\n\n"
-                "    INFORMATIONAL: Subscribed newsletters, industry updates, or general \"read later\" content. These usually contain an \"Unsubscribe\" link but are from brands the user trusts.\n\n"
-                "    PROMOTIONAL: Marketing emails, sales, coupons, and \"Limited Time\" offers.\n\n"
-                "    NOISE: Unsolicited spam, repetitive low-value system pings, or suspicious \"phishing\" content.\n\n"
-                "Instruction: Analyze the Subject and Body of the email provided. Respond ONLY with a JSON object containing the \"category\" and a brief \"reasoning\"."
-            ),
+            instruction="""
+Role: You are a Context-Aware Email Triage Agent. You categorize emails the user provides.
+
+    Task: Classify the provided email into one of four categories.
+
+    1. ACTIONABLE (Primary Concern)
+
+        Financials/Home: Anything from "Town of Weymouth," "National Grid," "Xfinity," "Rocket Mortgage," or contractors (e.g., "BDL Heating").
+
+        Security: "New login," "Verify device," or "Password reset" alerts.
+
+        Personal: Direct messages from "Lindsay Buckle" or specific humans (e.g., "Andy" or "Richard").
+
+    2. INFORMATIONAL (Secondary Concern)
+
+        Updates: "Shipment delivered," "Order confirmed," or "Industry updates."
+
+        Reading: Newsletters you actually subscribed to (e.g., "Tandem Coffee," "Apple Cash updates").
+
+    3. PROMOTIONAL (Marketing)
+
+        Sales: Subjects containing "Sale," "Off," "Savings," or "Gift for you."
+
+        Retailers: AAA Travel, Chewy, or fashion brands.
+
+    4. NOISE (Filter Out)
+
+        True Junk: Random spam or emails with absolutely zero recognizable content.
+
+    Strict Instructions:
+
+        Never claim "No Input": If a Subject exists, you must classify it. A subject line is enough data.
+
+        Stay Grounded: Only use the names and themes present in the text.
+
+        Format: Respond ONLY with valid JSON.
+
+        Example output:
+        {
+            "category": "CATEGORY_NAME",
+            "reasoning": "A 1-sentence explanation citing the specific keywords found."
+        }
+"""
         )
     
     # TODO: Use Pydantic models for outputs.
@@ -113,15 +147,20 @@ class EmailClassifier(BaseAgent):
         for i, email in enumerate[Message](emails, 1):
             # Prepare email content for classification
             # Include Subject and Body as requested by the instruction
-            email_text = f"From: {email.sender}\nSubject: {email.subject}\n"
+            email_text = (
+                "--- BEGIN EMAIL DATA ---\n"
+                f"SENDER: {email.sender}\n"
+                f"SUBJECT: {email.subject}\n"
+            )
             
             # Include body if available (prefer plain text, fallback to snippet)
             if email.plain:
                 # Truncate body if too long (keep first 2000 chars for classification)
                 body = email.plain[:2000] + "..." if len(email.plain) > 2000 else email.plain
-                email_text += f"Body: {body}\n"
+                email_text += f"BODY: {body}\n"
             elif email.snippet:
-                email_text += f"Snippet: {email.snippet}\n"
+                email_text += f"SNIPPET: {email.snippet}\n"
+            email_text += "--- END EMAIL DATA ---"
             
             # Create a context for the LLM sub-agent with the email as user content
             # Use model_copy to create a new context with updated user_content
