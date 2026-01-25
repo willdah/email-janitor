@@ -1,7 +1,7 @@
 """
 EmailProcessor - A Custom Agent for processing emails based on classifications.
 
-This agent retrieves classifications from EmailClassifier's agent_states and
+This agent retrieves classifications from ClassificationCoordinator's agent_states and
 applies appropriate Gmail labels to each email based on the classification category.
 All emails remain unread after processing.
 """
@@ -25,7 +25,7 @@ class EmailProcessor(BaseAgent):
     """
     A Custom Agent that processes emails based on classifications.
     
-    This agent retrieves classifications from EmailClassifier's agent_states and
+    This agent retrieves classifications from ClassificationCoordinator's agent_states and
     applies Gmail labels to emails based on their classification:
     - NOISE -> "Noise" label (removes from inbox)
     - PROMOTIONAL -> "Promotions" label (removes from inbox)
@@ -59,7 +59,7 @@ class EmailProcessor(BaseAgent):
         """
         Custom execution logic for the EmailProcessor agent.
         
-        This method retrieves classifications from EmailClassifier's agent_states,
+        This method retrieves classifications from ClassificationCoordinator's agent_states,
         maps them to Message objects from EmailCollector's agent_states, and
         applies appropriate labels based on the classification.
         
@@ -69,9 +69,9 @@ class EmailProcessor(BaseAgent):
         Yields:
             Events containing processing results
         """
-        # Retrieve classifications from EmailClassifier's agent_states
+        # Retrieve classifications from ClassificationCoordinator's agent_states
         # Try agent_states first, then fall back to session.state
-        classifier_state = ctx.agent_states.get("EmailClassifier")
+        classifier_state = ctx.agent_states.get("ClassificationCoordinator")
         collection_output: ClassificationCollectionOutput | None = None
         
         if classifier_state:
@@ -95,7 +95,7 @@ class EmailProcessor(BaseAgent):
                 author=self.name,
                 branch=ctx.branch,
                 content=types.Content(
-                    parts=[types.Part(text="No classifications found. EmailClassifier must run first.")]
+                    parts=[types.Part(text="No classifications found. ClassificationCoordinator must run first.")]
                 ),
             )
             yield event
