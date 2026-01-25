@@ -21,12 +21,15 @@ SESSION_ID = "email-janitor-session"
 # Load environment variables
 load_dotenv()
 
+
 # Define the main function
 async def main():
     """Main event loop for the email janitor agent."""
-    start_message = types.Content(parts=[types.Part(text="Begin the email janitor process.")])
+    start_message = types.Content(
+        parts=[types.Part(text="Begin the email janitor process.")]
+    )
     runner = InMemoryRunner(app_name=APP_NAME, app=app)
-    
+
     # Continuously run the agent until the user exits
     while True:
         try:
@@ -47,17 +50,18 @@ async def main():
                     for part in event.content.parts:
                         if part.text:
                             print(f"[{event.author}]: {part.text}")
-            
+
             # Wait before running again
             print("\nWaiting 10 seconds before next run...\n")
             await asyncio.sleep(10)
-            
+
         except KeyboardInterrupt:
             print("\nShutting down...")
             break
         except Exception as e:
             print(f"An error occurred: {e}")
             await asyncio.sleep(10)  # Wait before retrying
+
 
 if __name__ == "__main__":
     asyncio.run(main())
