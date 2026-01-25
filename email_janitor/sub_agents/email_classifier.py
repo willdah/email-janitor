@@ -3,7 +3,6 @@ EmailClassifier - A High-Isolation Agent for Strict Email Triage.
 Designed to prevent context leakage in local LLM environments.
 """
 
-import json
 import re
 import uuid
 from typing import AsyncGenerator
@@ -14,7 +13,6 @@ from google.adk.agents.llm_agent import Agent
 from google.adk.events.event import Event
 from google.adk.models.lite_llm import LiteLlm
 from google.genai import types
-from simplegmail.message import Message
 
 from ..models.schemas import (
     EmailCollectionOutput,
@@ -86,6 +84,7 @@ class EmailClassifier(BaseAgent):
             sender=email_data.sender,
             subject=email_data.subject,
             snippet=email_data.snippet[:500] 
+            # TODO: Add email body to the input if available.
         )
 
         # 3. THE ISOLATION FIX: Create a disposable Agent per email
@@ -112,8 +111,9 @@ class EmailClassifier(BaseAgent):
             Rule: Base reasoning ONLY on the data provided above. Do not invent keywords.
             """,
             output_schema=EmailClassificationOutput,
+            # TODO: Move these values to a configuration file.
             generate_content_config=types.GenerateContentConfig(
-                temperature=0.4, # Forces deterministic selection
+                temperature=0.4,
                 top_k=10
             )
         )
