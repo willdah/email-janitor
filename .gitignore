@@ -216,3 +216,6 @@ gmail_token.json
 
 # ADK
 .adk
+
+# Cursor
+.cursor
