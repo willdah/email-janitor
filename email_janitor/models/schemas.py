@@ -41,15 +41,21 @@ class EmailClassificationInput(BaseModel):
 
     sender: str = Field(description="Email sender address")
     subject: str = Field(description="Email subject line")
-    body: Optional[str] = Field(default=None, description="Email body text (truncated if long)")
-    snippet: Optional[str] = Field(default=None, description="Email snippet if body not available")
+    body: Optional[str] = Field(
+        default=None, description="Email body text (truncated if long)"
+    )
+    snippet: Optional[str] = Field(
+        default=None, description="Email snippet if body not available"
+    )
 
 
 class EmailClassificationOutput(BaseModel):
     """Output schema for EmailClassifier LLM sub-agent."""
 
     category: EmailCategory = Field(description="Classification category")
-    reasoning: str = Field(description="One-sentence explanation citing specific keywords found")
+    reasoning: str = Field(
+        description="One-sentence explanation citing specific keywords found"
+    )
     confidence: float = Field(
         default=0.5, ge=0.0, le=1.0, description="Confidence score 0-1"
     )
@@ -66,7 +72,9 @@ class ClassificationResult(BaseModel):
     subject: str = Field(description="Email subject line")
     classification: EmailCategory = Field(description="Classification category")
     reasoning: str = Field(description="Classification reasoning")
-    confidence: float = Field(default=0.5, ge=0.0, le=1.0, description="Confidence score")
+    confidence: float = Field(
+        default=0.5, ge=0.0, le=1.0, description="Confidence score"
+    )
     critic_status: Literal["skipped", "approved", "rejected", "escalated"] = Field(
         default="skipped", description="Critic review status"
     )
@@ -85,7 +93,9 @@ class ClassificationCollectionOutput(BaseModel):
     """EmailClassifier's output schema."""
 
     count: int = Field(description="Number of classifications")
-    classifications: list[ClassificationResult] = Field(description="List of classification results")
+    classifications: list[ClassificationResult] = Field(
+        description="List of classification results"
+    )
 
 
 class ProcessingResult(BaseModel):
@@ -105,7 +115,9 @@ class ProcessingSummaryOutput(BaseModel):
     total_processed: int = Field(description="Total number of emails processed")
     label_counts: dict[str, int] = Field(description="Count of emails per label/action")
     errors_count: int = Field(description="Number of errors encountered")
-    errors: Optional[list[str]] = Field(default=None, description="List of error messages if any")
+    errors: Optional[list[str]] = Field(
+        default=None, description="List of error messages if any"
+    )
 
 
 class CriticReview(BaseModel):

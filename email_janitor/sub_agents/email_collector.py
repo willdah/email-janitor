@@ -24,15 +24,15 @@ from ..models.schemas import EmailData, EmailCollectionOutput
 class EmailCollector(BaseAgent):
     """
     A deterministic Custom Agent that specializes in fetching unread emails.
-    
+
     This agent directly calls email client functions to retrieve unread messages.
     It does not use an LLM - it deterministically fetches emails every time it's called.
     The underlying email client can be swapped in the future without changing the agent interface.
-    
+
     This custom agent inherits from BaseAgent and implements _run_async_impl
     to define custom orchestration logic for email fetching.
     """
-    
+
     def __init__(
         self,
         name: str = "EmailCollector",
@@ -40,7 +40,7 @@ class EmailCollector(BaseAgent):
     ):
         """
         Initialize the EmailCollector agent.
-        
+
         Args:
             name: The name of the agent (default: "EmailCollector")
             description: Optional description of the agent
@@ -50,23 +50,23 @@ class EmailCollector(BaseAgent):
             name=name,
             description=description or default_description,
         )
-    
+
     async def _run_async_impl(
         self, ctx: InvocationContext
     ) -> AsyncGenerator[Event, None]:
         """
         Custom execution logic for the EmailCollector agent.
-        
+
         This method deterministically fetches unread emails by directly calling
         the email client function. The Message objects are preserved in agent_states
         for programmatic access, while a serialized dictionary is provided in the event.
-        
+
         Args:
             ctx: The invocation context containing session state and user input
-            
+
         Yields:
             Event containing a dictionary summary of the fetched unread emails.
-            
+
         Note:
             The Message objects are stored in ctx.agent_states[self.name]["emails"].
             This agent_states dictionary is shared across all agents in the same invocation,
@@ -75,42 +75,44 @@ class EmailCollector(BaseAgent):
         """
         # Directly fetch unread emails (deterministic, no LLM)
         emails: list[Message] = get_unread_emails()
-        
+
         # Convert emails to Pydantic EmailData models
         email_data_list = []
         for email in emails:
             labels = []
             # Handle label_ids - they might be strings or Label objects
             for label_id in email.label_ids:
-                if hasattr(label_id, 'name'):
+                if hasattr(label_id, "name"):
                     labels.append(label_id.name)
                 else:
                     labels.append(str(label_id))
 
-            email_data_list.append(EmailData(
-                id=email.id,
-                sender=email.sender,
-                recipient=email.recipient,
-                subject=email.subject,
-                date=email.date,
-                snippet=email.snippet,
-                thread_id=email.thread_id,
-                labels=labels,
-            ))
-        
+            email_data_list.append(
+                EmailData(
+                    id=email.id,
+                    sender=email.sender,
+                    recipient=email.recipient,
+                    subject=email.subject,
+                    date=email.date,
+                    snippet=email.snippet,
+                    thread_id=email.thread_id,
+                    labels=labels,
+                )
+            )
+
         # Create structured output using Pydantic model
         collection_output = EmailCollectionOutput(
             count=len(emails),
             emails=email_data_list,
         )
-        
+
         # Store the Message objects in agent_states for accessing full email body
         # Also store the structured output for type-safe access
         ctx.agent_states[self.name] = {
             "emails": emails,  # Preserve the original Message objects for accessing full body
             "collection_output": collection_output,  # Structured Pydantic model
         }
-        
+
         # Create an event with the structured output as JSON
         # The Message objects are preserved in ctx.agent_states[self.name]["emails"]
         # for programmatic access by other agents or code
@@ -122,16 +124,16 @@ class EmailCollector(BaseAgent):
                 parts=[types.Part(text=collection_output.model_dump_json(indent=2))]
             ),
         )
-        
+
         yield event
-    
+
     def fetch_emails(self):
         """
         Direct method to fetch unread emails using the email client tools.
-        
+
         This is a convenience method that bypasses the agent orchestration
         for direct programmatic access to email fetching.
-        
+
         Returns:
             A list of unread email messages.
         """

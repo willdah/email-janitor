@@ -57,7 +57,9 @@ class ClassificationCoordinator(BaseAgent):
             model="ollama_chat/llama3.1:8b"
         )
         # self._critic_model = critic_model or LiteLlm(model="ollama_chat/llama3.1:8b")
-        self._critic_model = critic_model or LiteLlm(model="ollama_chat/mistral-nemo:latest")
+        self._critic_model = critic_model or LiteLlm(
+            model="ollama_chat/mistral-nemo:latest"
+        )
         self._config = config or ClassificationConfig()
         self._critic_agent = CriticAgent(model=self._critic_model)
 
@@ -235,8 +237,8 @@ Please re-classify with the critique in mind:
                 raw_text = event.content.parts[0].text or ""
                 try:
                     clean_json = self._extract_clean_json(raw_text)
-                    classification_output = EmailClassificationOutput.model_validate_json(
-                        clean_json
+                    classification_output = (
+                        EmailClassificationOutput.model_validate_json(clean_json)
                     )
                 except Exception as e:
                     classification_output = EmailClassificationOutput(
@@ -271,7 +273,10 @@ Please re-classify with the critique in mind:
             )
 
             # Step 2: Check if we should skip critic (fast path)
-            if self._should_skip_critic(classifier_output.confidence) and refinement_count == 0:
+            if (
+                self._should_skip_critic(classifier_output.confidence)
+                and refinement_count == 0
+            ):
                 # Fast path: high confidence, no previous rejections
                 return ClassificationResult(
                     email_id=email_data.id,

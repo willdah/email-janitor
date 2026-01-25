@@ -36,7 +36,8 @@ class CriticAgent(BaseAgent):
     ):
         super().__init__(
             name=name,
-            description=description or "Reviews email classifications for accuracy and provides critique.",
+            description=description
+            or "Reviews email classifications for accuracy and provides critique.",
         )
         self._model_config = model or LiteLlm(model="ollama_chat/llama3.1:8b")
 
@@ -45,13 +46,13 @@ class CriticAgent(BaseAgent):
         match = re.search(r"\{.*\}", text, re.DOTALL)
         return match.group(0) if match else text.strip()
 
-    def _build_critic_instruction(
-        self, critic_input: CriticInput
-    ) -> str:
+    def _build_critic_instruction(self, critic_input: CriticInput) -> str:
         """Build the system instruction for the critic agent."""
         email_data = critic_input.original_email
         classification = critic_input.classification_output
-        email_body = critic_input.email_body or email_data.snippet or "No body available"
+        email_body = (
+            critic_input.email_body or email_data.snippet or "No body available"
+        )
 
         return f"""
 Role: You are a strict Email Classification Reviewer. Your job is to catch errors, not approve everything.
@@ -84,7 +85,7 @@ Body/Snippet: {email_body[:1000] if len(email_body) > 1000 else email_body}
 Category: {classification.category}
 Reasoning: {classification.reasoning}
 Confidence: {classification.confidence}
-Keywords Found: {', '.join(classification.keywords_found) if classification.keywords_found else 'None'}
+Keywords Found: {", ".join(classification.keywords_found) if classification.keywords_found else "None"}
 ---
 
 Output Format:
