@@ -437,6 +437,7 @@ dependencies = [
     { name = "google-adk" },
     { name = "litellm" },
     { name = "pydantic" },
+    { name = "pydantic-settings" },
     { name = "simplegmail" },
 ]
 
@@ -451,6 +452,7 @@ requires-dist = [
     { name = "google-adk", specifier = ">=1.23.0" },
     { name = "litellm", specifier = ">=1.81.1" },
     { name = "pydantic", specifier = ">=2.12.5" },
+    { name = "pydantic-settings", specifier = ">=2.0.0" },
     { name = "simplegmail", specifier = ">=4.1.1" },
 ]
 
