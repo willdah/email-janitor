@@ -163,6 +163,8 @@ class EmailProcessor(BaseAgent):
             try:
                 if classification_category == EmailCategory.NOISE:
                     apply_label_to_message(message, "Noise", remove_inbox=True)
+                    # Mark as processed to prevent reprocessing
+                    apply_label_to_message(message, "EmailJanitor-Processed", remove_inbox=False)
                     label_counts["Noise"] += 1
                     processing_results.append(ProcessingResult(
                         email_id=email_id,
@@ -174,6 +176,8 @@ class EmailProcessor(BaseAgent):
                     ))
                 elif classification_category == EmailCategory.PROMOTIONAL:
                     apply_label_to_message(message, "Promotions", remove_inbox=True)
+                    # Mark as processed to prevent reprocessing
+                    apply_label_to_message(message, "EmailJanitor-Processed", remove_inbox=False)
                     label_counts["Promotions"] += 1
                     processing_results.append(ProcessingResult(
                         email_id=email_id,
@@ -185,6 +189,8 @@ class EmailProcessor(BaseAgent):
                     ))
                 elif classification_category == EmailCategory.INFORMATIONAL:
                     apply_label_to_message(message, "Newsletters", remove_inbox=True)
+                    # Mark as processed to prevent reprocessing
+                    apply_label_to_message(message, "EmailJanitor-Processed", remove_inbox=False)
                     label_counts["Newsletters"] += 1
                     processing_results.append(ProcessingResult(
                         email_id=email_id,
@@ -195,7 +201,8 @@ class EmailProcessor(BaseAgent):
                         status="success",
                     ))
                 elif classification_category == EmailCategory.ACTIONABLE:
-                    # No action required - leave in inbox
+                    # Mark as processed to prevent reprocessing (leave in inbox)
+                    apply_label_to_message(message, "EmailJanitor-Processed", remove_inbox=False)
                     label_counts["ACTIONABLE"] += 1
                     processing_results.append(ProcessingResult(
                         email_id=email_id,

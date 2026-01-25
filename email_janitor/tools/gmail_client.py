@@ -18,11 +18,11 @@ def get_gmail_client():
 def get_unread_emails() -> list[Message]:
     """
     Uses the Gmail client to get a list of unread emails from the inbox only.
-    Filters out sent messages using Gmail's query syntax for efficient server-side filtering.
+    Filters out sent messages and already processed emails using Gmail's query syntax for efficient server-side filtering.
     """
     gmail: Gmail = get_gmail_client()
-    # Use Gmail query syntax to filter: in inbox but not in sent folder
-    unread_emails: list[Message] = gmail.get_unread_messages(query='in:inbox -in:sent')
+    # Use Gmail query syntax to filter: in inbox, not in sent folder, and not already processed
+    unread_emails: list[Message] = gmail.get_unread_messages(query='in:inbox -in:sent -label:EmailJanitor-Processed')
     return unread_emails
 
 
