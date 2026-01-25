@@ -4,6 +4,7 @@ from .sub_agents.email_processor import email_processor
 from .sub_agents.email_loop_coordinator import email_loop_coordinator
 from google.adk.agents.sequential_agent import SequentialAgent
 from google.adk.agents.loop_agent import LoopAgent
+from google.adk.apps import App
 
 
 # Create the email classification loop agent
@@ -28,4 +29,9 @@ root_agent = SequentialAgent(
         email_classification_loop,    # Step 3: Classify emails one at a time
         email_processor,              # Step 4: Process all classified emails
     ],
+)
+
+app = App(
+    name="EmailJanitor", 
+    root_agent=root_agent
 )
