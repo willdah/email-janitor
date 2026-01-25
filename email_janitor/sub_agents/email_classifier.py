@@ -58,8 +58,24 @@ class EmailClassifier(BaseAgent):
         current_index = ctx.session.state.get("current_email_index", 0)
         
         if current_index >= len(collection_output.emails):
-            yield Event(invocation_id=ctx.invocation_id, author=self.name, branch=ctx.branch,
-                        content=types.Content(parts=[types.Part(text="Loop complete.")]))
+            # Ensure final classifications are stored before escalating
+            # Get existing classifications to ensure they're preserved
+            existing_state = ctx.agent_states.get(self.name, {})
+            existing_collection = existing_state.get("collection_output")
+            
+            if existing_collection:
+                # Store in session.state as backup for EmailProcessor
+                ctx.session.state["final_classifications"] = existing_collection.model_dump()
+            
+            # Signal loop completion by escalating - this tells LoopAgent to stop
+            event = Event(
+                invocation_id=ctx.invocation_id,
+                author=self.name,
+                branch=ctx.branch,
+                content=types.Content(parts=[types.Part(text="All emails classified.")])
+            )
+            event.actions.escalate = True
+            yield event
             return
 
         email_data = collection_output.emails[current_index]
@@ -128,11 +144,41 @@ class EmailClassifier(BaseAgent):
             reasoning=classification_output.reasoning,
         )
 
-        # 6. Update State & Yield
+        # 6. Update State & Yield - Accumulate all classifications
+        # Get existing classifications from agent_states first, then fall back to session.state
+        existing_state = ctx.agent_states.get(self.name, {})
+        existing_collection = existing_state.get("collection_output")
+        
+        # If not found in agent_states (which may have been reset), check session.state
+        if not existing_collection:
+            final_classifications_data = ctx.session.state.get("final_classifications")
+            if final_classifications_data:
+                try:
+                    existing_collection = ClassificationCollectionOutput.model_validate(final_classifications_data)
+                except Exception:
+                    # If parsing fails, continue with empty collection
+                    existing_collection = None
+        
+        if existing_collection:
+            # Append to existing classifications
+            all_classifications = existing_collection.classifications + [result]
+        else:
+            # First classification
+            all_classifications = [result]
+        
+        # Store accumulated classifications
+        collection_output = ClassificationCollectionOutput(
+            count=len(all_classifications),
+            classifications=all_classifications
+        )
+        
         ctx.agent_states[self.name] = {
             "current_classification": result,
-            "collection_output": ClassificationCollectionOutput(count=1, classifications=[result])
+            "collection_output": collection_output
         }
+        
+        # Also store in session.state so it persists even if agent_states are reset
+        ctx.session.state["final_classifications"] = collection_output.model_dump()
         ctx.session.state["current_email_index"] = current_index + 1
 
         yield Event(

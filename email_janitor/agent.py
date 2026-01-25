@@ -6,26 +6,26 @@ from google.adk.agents.sequential_agent import SequentialAgent
 from google.adk.agents.loop_agent import LoopAgent
 
 
-# Create the email processing loop agent
-# This loop processes one email at a time: EmailClassifier -> EmailProcessor
+# Create the email classification loop agent
+# This loop classifies emails one at a time: EmailClassifier
 # max_iterations is set to 100 to handle reasonable email volumes
 # The loop will exit early when all emails are processed (handled by EmailClassifier)
-email_processing_loop = LoopAgent(
-    name="EmailProcessingLoop",
-    description="A loop agent that processes emails one at a time through classification and processing.",
-    # sub_agents=[email_classifier],
-    sub_agents=[email_classifier, email_processor],
-    max_iterations=100,  # Reasonable upper limit; loop exits early when all emails processed
+email_classification_loop = LoopAgent(
+    name="EmailClassificationLoop",
+    description="A loop agent that classifies emails one at a time.",
+    sub_agents=[email_classifier],
+    max_iterations=100
 )
 
 
-# Root agent: EmailCollector -> EmailLoopCoordinator -> EmailProcessingLoop
+# Root agent: EmailCollector -> EmailLoopCoordinator -> EmailClassificationLoop -> EmailProcessor
 root_agent = SequentialAgent(
     name="EmailJanitor",
-    description="A root agent that orchestrates the email janitor process: collects emails, then processes them one at a time in a loop.",
+    description="A root agent that orchestrates the email janitor process: collects emails, classifies them in a loop, then processes all classifications.",
     sub_agents=[
-        email_collector,           # Step 1: Collect all unread emails
-        email_loop_coordinator,    # Step 2: Initialize loop state
-        email_processing_loop,    # Step 3: Process emails one at a time
+        email_collector,              # Step 1: Collect all unread emails
+        email_loop_coordinator,       # Step 2: Initialize loop state
+        email_classification_loop,    # Step 3: Classify emails one at a time
+        email_processor,              # Step 4: Process all classified emails
     ],
 )
