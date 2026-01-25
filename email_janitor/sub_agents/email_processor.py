@@ -6,7 +6,6 @@ applies appropriate Gmail labels to each email based on the classification categ
 All emails remain unread after processing.
 """
 
-import json
 from typing import AsyncGenerator
 from google.adk.agents.base_agent import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
@@ -71,8 +70,25 @@ class EmailProcessor(BaseAgent):
             Events containing processing results
         """
         # Retrieve classifications from EmailClassifier's agent_states
+        # Try agent_states first, then fall back to session.state
         classifier_state = ctx.agent_states.get("EmailClassifier")
-        if not classifier_state:
+        collection_output: ClassificationCollectionOutput | None = None
+        
+        if classifier_state:
+            collection_output = classifier_state.get("collection_output")
+        
+        # Fallback: check session.state if not found in agent_states
+        if not collection_output:
+            final_classifications_data = ctx.session.state.get("final_classifications")
+            if final_classifications_data:
+                try:
+                    # model_dump() returns a dict, so we can validate it directly
+                    collection_output = ClassificationCollectionOutput.model_validate(final_classifications_data)
+                except Exception:
+                    # If parsing fails, continue to error handling below
+                    pass
+        
+        if not collection_output:
             # No classifications found
             event = Event(
                 invocation_id=ctx.invocation_id,
@@ -80,20 +96,6 @@ class EmailProcessor(BaseAgent):
                 branch=ctx.branch,
                 content=types.Content(
                     parts=[types.Part(text="No classifications found. EmailClassifier must run first.")]
-                ),
-            )
-            yield event
-            return
-        
-        # Get structured output from EmailClassifier
-        collection_output: ClassificationCollectionOutput | None = classifier_state.get("collection_output")
-        if not collection_output:
-            event = Event(
-                invocation_id=ctx.invocation_id,
-                author=self.name,
-                branch=ctx.branch,
-                content=types.Content(
-                    parts=[types.Part(text="No classification collection output found. EmailClassifier must provide structured output.")]
                 ),
             )
             yield event
