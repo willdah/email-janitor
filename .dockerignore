@@ -1,0 +1,11 @@
+# Directories
+**/.adk/
+**/.cursor/
+**/*pycache*
+.venv/
+docs/
+
+# Files
+.env
+client_secret.json
+gmail_token.json
