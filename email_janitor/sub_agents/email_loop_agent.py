@@ -112,6 +112,7 @@ class EmailLoopAgent(BaseAgent):
         # Initialize current_email_index to 0 for the loop
         ctx.session.state["current_email_index"] = 0
         ctx.session.state["total_emails"] = email_count
+        ctx.session.state["user"] = "email-janitor-user"
 
         # Store email count in agent_states for reference
         ctx.agent_states[self.name] = {
