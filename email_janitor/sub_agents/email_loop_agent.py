@@ -13,7 +13,7 @@ from google.genai import types
 from ..models.schemas import EmailCollectionOutput
 
 
-class EmailLoopCoordinator(BaseAgent):
+class EmailLoopAgent(BaseAgent):
     """
     A Custom Agent that coordinates the email processing loop.
 
@@ -24,7 +24,7 @@ class EmailLoopCoordinator(BaseAgent):
 
     def __init__(
         self,
-        name: str = "EmailLoopCoordinator",
+        name: str = "EmailLoopAgent",
         description: str | None = None,
     ):
         """
@@ -57,8 +57,8 @@ class EmailLoopCoordinator(BaseAgent):
         Yields:
             Event confirming initialization
         """
-        # Retrieve emails from EmailCollector's agent_states
-        collector_state = ctx.agent_states.get("EmailCollector")
+        # Retrieve emails from EmailCollectorAgent's agent_states
+        collector_state = ctx.agent_states.get("EmailCollectorAgent")
         if not collector_state:
             event = Event(
                 invocation_id=ctx.invocation_id,
@@ -67,7 +67,7 @@ class EmailLoopCoordinator(BaseAgent):
                 content=types.Content(
                     parts=[
                         types.Part(
-                            text="No emails found. EmailCollector must run first."
+                            text="No emails found. EmailCollectorAgent must run first."
                         )
                     ]
                 ),
@@ -75,7 +75,7 @@ class EmailLoopCoordinator(BaseAgent):
             yield event
             return
 
-        # Get structured output from EmailCollector
+        # Get structured output from EmailCollectorAgent
         collection_output: EmailCollectionOutput | None = collector_state.get(
             "collection_output"
         )
@@ -87,7 +87,7 @@ class EmailLoopCoordinator(BaseAgent):
                 content=types.Content(
                     parts=[
                         types.Part(
-                            text="No email collection output found. EmailCollector must provide structured output."
+                            text="No email collection output found. EmailCollectorAgent must provide structured output."
                         )
                     ]
                 ),
@@ -136,4 +136,4 @@ class EmailLoopCoordinator(BaseAgent):
 
 
 # Create a default instance
-email_loop_coordinator = EmailLoopCoordinator()
+email_loop_agent = EmailLoopAgent()

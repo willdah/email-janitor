@@ -75,17 +75,8 @@ class ClassificationResult(BaseModel):
     confidence: float = Field(
         default=0.5, ge=0.0, le=1.0, description="Confidence score"
     )
-    critic_status: Literal["skipped", "approved", "rejected", "escalated"] = Field(
-        default="skipped", description="Critic review status"
-    )
     refinement_count: int = Field(
         default=0, ge=0, description="Number of refinement iterations"
-    )
-    consensus_confidence: Optional[float] = Field(
-        default=None, description="Weighted consensus confidence"
-    )
-    escalation_reason: Optional[str] = Field(
-        default=None, description="Reason if escalated"
     )
 
 
@@ -120,31 +111,3 @@ class ProcessingSummaryOutput(BaseModel):
     )
 
 
-class CriticReview(BaseModel):
-    """Output schema for CriticAgent review."""
-
-    approved: bool = Field(description="Whether the classification is approved")
-    alternative_category: Optional[EmailCategory] = Field(
-        default=None, description="Alternative if rejected"
-    )
-    confidence: float = Field(
-        ge=0.0, le=1.0, description="Critic's confidence in review"
-    )
-    critique: str = Field(description="Detailed critique explaining approval/rejection")
-    suggested_reasoning: Optional[str] = Field(
-        default=None, description="Improved reasoning if rejected"
-    )
-
-
-class CriticInput(BaseModel):
-    """Input schema for CriticAgent."""
-
-    original_email: EmailClassificationInput = Field(
-        description="Original email to be reviewed"
-    )
-    classification_output: EmailClassificationOutput = Field(
-        description="Classification output to review"
-    )
-    email_body: Optional[str] = Field(
-        default=None, description="Full email body for context"
-    )

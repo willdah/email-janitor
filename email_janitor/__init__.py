@@ -1,4 +1,4 @@
 from . import agent
-from .sub_agents.email_collector import EmailCollector, email_collector
+from .sub_agents.email_collector_agent import EmailCollectorAgent, email_collector_agent
 
-__all__ = ["agent", "EmailCollector", "email_collector"]
+__all__ = ["agent", "EmailCollectorAgent", "email_collector_agent"]
