@@ -28,7 +28,7 @@ root_agent = SequentialAgent(
         email_collector_agent,  # Step 1: Collect all unread emails
         email_loop_agent,  # Step 2: Initialize loop state (current_email_index)
         email_classifier_loop_agent,  # Step 3: Loop that classifies emails one at a time (contains EmailClassifierAgent)
-        email_labeler_agent,  # Step 4: Process all classified emails
+        # email_labeler_agent,  # Step 4: Process all classified emails
     ],
 )
 

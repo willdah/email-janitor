@@ -14,7 +14,7 @@ def build_instruction(classification_input):
   -------------------------
 
   CONFIDENCE SCORING GUIDELINES:
-  Your confidence score (0.0-1.0) indicates how certain you are about the classification:
+  Your confidence score (1-5) indicates how certain you are about the classification:
 
   1. Confidence Calibration:
     - 5: Extremely confident - clear, unambiguous evidence, no edge cases

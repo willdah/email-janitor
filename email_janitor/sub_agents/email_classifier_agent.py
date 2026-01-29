@@ -104,12 +104,12 @@ class EmailClassifierAgent(BaseAgent):
                     classification_output = EmailClassificationOutput(
                         category=EmailCategory.NOISE,
                         reasoning=f"Parsing error: {str(e)}",
-                        confidence=0.3,
+                        confidence=1.0,
                     )
 
         if not classification_output:
             classification_output = EmailClassificationOutput(
-                category=EmailCategory.NOISE, reasoning="No response.", confidence=0.3
+                category=EmailCategory.NOISE, reasoning="No response.", confidence=1.0
             )
 
         return classification_output

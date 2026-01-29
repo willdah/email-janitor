@@ -51,9 +51,9 @@ The app uses LiteLLM with Ollama. The classifier model is set in the [classifica
 
 [`ClassificationConfig`](email_janitor/config.py) reads from environment variables with the `CLASSIFICATION_` prefix:
 
-| Variable                              | Description                              | Default      |
-| ------------------------------------- | ---------------------------------------- | ------------ |
-| `CLASSIFICATION_CONFIDENCE_THRESHOLD` | Confidence threshold for classification  | `0.95`       |
+| Variable                              | Description                                         | Default |
+| ------------------------------------- | --------------------------------------------------- | ------- |
+| `CLASSIFICATION_CONFIDENCE_THRESHOLD` | Confidence threshold for classification (1-5 scale) | `4.0`   |
 
 See [`.env.example`](.env.example) for a template. Copy to `.env` and adjust as needed.
 
