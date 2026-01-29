@@ -21,7 +21,7 @@ from ..tools.gmail_client import get_unread_emails
 from ..models.schemas import EmailData, EmailCollectionOutput
 
 
-class EmailCollector(BaseAgent):
+class EmailCollectorAgent(BaseAgent):
     """
     A deterministic Custom Agent that specializes in fetching unread emails.
 
@@ -35,7 +35,7 @@ class EmailCollector(BaseAgent):
 
     def __init__(
         self,
-        name: str = "EmailCollector",
+        name: str = "EmailCollectorAgent",
         description: str | None = None,
     ):
         """
@@ -71,7 +71,7 @@ class EmailCollector(BaseAgent):
             The Message objects are stored in ctx.agent_states[self.name]["emails"].
             This agent_states dictionary is shared across all agents in the same invocation,
             so other agents can access the emails via:
-            `ctx.agent_states["EmailCollector"]["emails"]`
+            `ctx.agent_states["EmailCollectorAgent"]["emails"]`
         """
         # Directly fetch unread emails (deterministic, no LLM)
         emails: list[Message] = get_unread_emails()
@@ -141,4 +141,4 @@ class EmailCollector(BaseAgent):
 
 
 # Create a default instance
-email_collector = EmailCollector()
+email_collector_agent = EmailCollectorAgent()

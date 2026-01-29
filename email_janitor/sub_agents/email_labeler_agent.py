@@ -1,7 +1,7 @@
 """
 EmailProcessor - A Custom Agent for processing emails based on classifications.
 
-This agent retrieves classifications from ClassificationCoordinator's agent_states and
+This agent retrieves classifications from EmailClassifierAgent's agent_states and
 applies appropriate Gmail labels to each email based on the classification category.
 All emails remain unread after processing.
 """
@@ -21,11 +21,11 @@ from ..models.schemas import (
 )
 
 
-class EmailProcessor(BaseAgent):
+class EmailLabelerAgent(BaseAgent):
     """
-    A Custom Agent that processes emails based on classifications.
+    A Custom Agent that labels emails based on classifications.
 
-    This agent retrieves classifications from ClassificationCoordinator's agent_states and
+    This agent retrieves classifications from EmailClassifierAgent's agent_states and
     applies Gmail labels to emails based on their classification:
     - NOISE -> "Noise" label (removes from inbox)
     - PROMOTIONAL -> "Promotions" label (removes from inbox)
@@ -37,7 +37,7 @@ class EmailProcessor(BaseAgent):
 
     def __init__(
         self,
-        name: str = "EmailProcessor",
+        name: str = "EmailLabelerAgent",
         description: str | None = None,
     ):
         """
@@ -59,8 +59,8 @@ class EmailProcessor(BaseAgent):
         """
         Custom execution logic for the EmailProcessor agent.
 
-        This method retrieves classifications from ClassificationCoordinator's agent_states,
-        maps them to Message objects from EmailCollector's agent_states, and
+        This method retrieves classifications from EmailClassifierAgent's agent_states,
+        maps them to Message objects from EmailCollectorAgent's agent_states, and
         applies appropriate labels based on the classification.
 
         Args:
@@ -69,9 +69,9 @@ class EmailProcessor(BaseAgent):
         Yields:
             Events containing processing results
         """
-        # Retrieve classifications from ClassificationCoordinator's agent_states
+        # Retrieve classifications from EmailClassifierAgent's agent_states
         # Try agent_states first, then fall back to session.state
-        classifier_state = ctx.agent_states.get("ClassificationCoordinator")
+        classifier_state = ctx.agent_states.get("EmailClassifierAgent")
         collection_output: ClassificationCollectionOutput | None = None
 
         if classifier_state:
@@ -99,7 +99,7 @@ class EmailProcessor(BaseAgent):
                 content=types.Content(
                     parts=[
                         types.Part(
-                            text="No classifications found. ClassificationCoordinator must run first."
+                            text="No classifications found. EmailClassifierAgent must run first."
                         )
                     ]
                 ),
@@ -121,8 +121,8 @@ class EmailProcessor(BaseAgent):
             yield event
             return
 
-        # Retrieve emails from EmailCollector's agent_states
-        collector_state = ctx.agent_states.get("EmailCollector")
+        # Retrieve emails from EmailCollectorAgent's agent_states
+        collector_state = ctx.agent_states.get("EmailCollectorAgent")
         if not collector_state or "emails" not in collector_state:
             # No emails found
             event = Event(
@@ -132,7 +132,7 @@ class EmailProcessor(BaseAgent):
                 content=types.Content(
                     parts=[
                         types.Part(
-                            text="No emails found. EmailCollector must run first."
+                            text="No emails found. EmailCollectorAgent must run first."
                         )
                     ]
                 ),
@@ -295,4 +295,4 @@ class EmailProcessor(BaseAgent):
 
 
 # Create a default instance
-email_processor = EmailProcessor()
+email_labeler_agent = EmailLabelerAgent()
