@@ -109,5 +109,3 @@ class ProcessingSummaryOutput(BaseModel):
     errors: Optional[list[str]] = Field(
         default=None, description="List of error messages if any"
     )
-
-

@@ -1,6 +1,5 @@
-
 def build_instruction(classification_input):
-  return f"""
+    return f"""
   Role: You are an expert email classifier that classifies emails into one of the following categories:
     1. ACTIONABLE: Security alerts, invoices, bills, or direct messages from individuals.
     2. INFORMATIONAL: Newsletters, shipping updates, or trusted industry news.
