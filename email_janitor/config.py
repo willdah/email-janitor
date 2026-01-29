@@ -18,5 +18,8 @@ class ClassificationConfig(BaseSettings):
     )
 
     confidence_threshold: float = Field(
-        default=0.95, ge=0.0, le=1.0, description="Confidence threshold for classification"
+        default=0.95,
+        ge=0.0,
+        le=1.0,
+        description="Confidence threshold for classification",
     )

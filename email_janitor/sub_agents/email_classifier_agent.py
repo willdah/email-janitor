@@ -43,8 +43,7 @@ class EmailClassifierAgent(BaseAgent):
     ):
         super().__init__(
             name=name,
-            description=description
-            or "Coordinates email classification.",
+            description=description or "Coordinates email classification.",
         )
         self._classifier_model = classifier_model or LiteLlm(
             model="ollama_chat/llama3.1:8b"
@@ -125,9 +124,7 @@ class EmailClassifierAgent(BaseAgent):
             ClassificationResult with final classification
         """
         # Classify email
-        classifier_output = await self._classify_email(
-            ctx, email_data, email_body
-        )
+        classifier_output = await self._classify_email(ctx, email_data, email_body)
 
         return ClassificationResult(
             email_id=email_data.id,
