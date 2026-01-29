@@ -57,7 +57,7 @@ class EmailClassificationOutput(BaseModel):
         description="One-sentence explanation citing specific keywords found"
     )
     confidence: float = Field(
-        default=0.5, ge=0.0, le=1.0, description="Confidence score 0-1"
+        default=3.0, ge=1.0, le=5.0, description="Confidence score 1-5"
     )
     keywords_found: list[str] = Field(
         default_factory=list, description="Key terms that influenced classification"
@@ -73,7 +73,7 @@ class ClassificationResult(BaseModel):
     classification: EmailCategory = Field(description="Classification category")
     reasoning: str = Field(description="Classification reasoning")
     confidence: float = Field(
-        default=0.5, ge=0.0, le=1.0, description="Confidence score"
+        default=3.0, ge=1.0, le=5.0, description="Confidence score 1-5"
     )
     refinement_count: int = Field(
         default=0, ge=0, description="Number of refinement iterations"
