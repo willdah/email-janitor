@@ -2,6 +2,7 @@
 name = "email-janitor"
 version = "0.1.0"
 description = "Email Janitor is an agentic solution that cleans up your email inbox."
+authors = [{name = "Will Ahern"}]
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
