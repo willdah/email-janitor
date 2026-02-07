@@ -113,6 +113,10 @@ class EmailCollectorAgent(BaseAgent):
             "collection_output": collection_output,  # Structured Pydantic model
         }
 
+        # Also store collection_output in session.state for callback access
+        # (callbacks only have access to session.state, not agent_states)
+        ctx.session.state["collector_output"] = collection_output.model_dump()
+
         # Create an event with the structured output as JSON
         # The Message objects are preserved in ctx.agent_states[self.name]["emails"]
         # for programmatic access by other agents or code
