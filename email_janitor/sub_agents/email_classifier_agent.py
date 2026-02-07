@@ -6,9 +6,10 @@ This coordinator classifies emails using an LLM classifier.
 
 import re
 import uuid
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Callable, Optional
 
 from google.adk.agents.base_agent import BaseAgent
+from google.adk.agents.callback_context import CallbackContext
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.agents.llm_agent import Agent
 from google.adk.events.event import Event
@@ -16,9 +17,9 @@ from google.adk.models.lite_llm import LiteLlm
 from google.genai import types
 from simplegmail.message import Message
 
+from ..callbacks import cleanup_llm_json_callback
 from ..config import ClassificationConfig
 from ..models.schemas import (
-    ClassificationCollectionOutput,
     ClassificationResult,
     EmailCategory,
     EmailClassificationInput,
@@ -28,10 +29,20 @@ from ..models.schemas import (
 )
 from ..instructions.email_classifier_agent import build_instruction
 
+# Type alias for callback functions
+AfterAgentCallback = Callable[[CallbackContext], Optional[types.Content]]
+
 
 class EmailClassifierAgent(BaseAgent):
     """
     Coordinates email classification.
+
+    This agent classifies a single email per invocation. When wrapped in a LoopAgent,
+    it processes emails one at a time until all are classified.
+
+    Callbacks:
+        - after_agent_callback: Called after each classification. Use this to
+          accumulate results or perform post-classification processing.
     """
 
     def __init__(
@@ -40,6 +51,7 @@ class EmailClassifierAgent(BaseAgent):
         description: str | None = None,
         classifier_model: LiteLlm | None = None,
         config: ClassificationConfig | None = None,
+        after_agent_callback: AfterAgentCallback | None = None,
     ):
         super().__init__(
             name=name,
@@ -49,6 +61,7 @@ class EmailClassifierAgent(BaseAgent):
             model="ollama_chat/llama3.1:8b"
         )
         self._config = config or ClassificationConfig()
+        self._after_agent_callback = after_agent_callback
 
     def _extract_clean_json(self, text: str) -> str:
         """Regex helper to handle local LLM markdown 'chatter'."""
@@ -89,13 +102,17 @@ class EmailClassifierAgent(BaseAgent):
             generate_content_config=types.GenerateContentConfig(
                 temperature=0.4, top_k=10
             ),
+            # Use callback to clean JSON from markdown code blocks
+            after_model_callback=cleanup_llm_json_callback,
         )
 
         classification_output = None
         async for event in classifier_llm.run_async(ctx):
             if event.is_final_response() and event.content:
+                # JSON is already cleaned by after_model_callback
                 raw_text = event.content.parts[0].text or ""
                 try:
+                    # Fallback cleanup in case callback didn't catch everything
                     clean_json = self._extract_clean_json(raw_text)
                     classification_output = (
                         EmailClassificationOutput.model_validate_json(clean_json)
@@ -139,8 +156,21 @@ class EmailClassifierAgent(BaseAgent):
     async def _run_async_impl(
         self, ctx: InvocationContext
     ) -> AsyncGenerator[Event, None]:
-        """Main execution logic for the coordinator."""
-        # 1. State Retrieval
+        """
+        Main execution logic for the classifier.
+
+        This method:
+        1. Retrieves the current email to classify based on current_email_index
+        2. Classifies the email using the LLM
+        3. Stores the result in session.state for the after_agent_callback to accumulate
+        4. Signals loop completion when all emails are processed
+
+        Note: State initialization (current_email_index) is handled by the
+        before_agent_callback on the parent LoopAgent. Classification accumulation
+        is handled by the after_agent_callback.
+        """
+        # Retrieve collection output from agent_states (for Message objects)
+        # and session.state (for serialized data)
         collector_state = ctx.agent_states.get("EmailCollectorAgent")
         if not collector_state or "collection_output" not in collector_state:
             yield Event(
@@ -156,16 +186,8 @@ class EmailClassifierAgent(BaseAgent):
         collection_output: EmailCollectionOutput = collector_state["collection_output"]
         current_index = ctx.session.state.get("current_email_index", 0)
 
+        # Check if all emails have been processed
         if current_index >= len(collection_output.emails):
-            # Ensure final classifications are stored before escalating
-            existing_state = ctx.agent_states.get(self.name, {})
-            existing_collection = existing_state.get("collection_output")
-
-            if existing_collection:
-                ctx.session.state["final_classifications"] = (
-                    existing_collection.model_dump()
-                )
-
             # Signal loop completion
             event = Event(
                 invocation_id=ctx.invocation_id,
@@ -181,7 +203,7 @@ class EmailClassifierAgent(BaseAgent):
 
         email_data = collection_output.emails[current_index]
 
-        # Get full email body if available
+        # Get full email body if available (from Message objects in agent_states)
         email_body = None
         emails: list[Message] | None = collector_state.get("emails")
         if emails:
@@ -193,39 +215,17 @@ class EmailClassifierAgent(BaseAgent):
                         email_body = email_data.snippet
                     break
 
-        # Process email through classification pipeline
+        # Classify the email
         result = await self._process_email(ctx, email_data, email_body)
 
-        # Update State & Yield - Accumulate all classifications
-        existing_state = ctx.agent_states.get(self.name, {})
-        existing_collection = existing_state.get("collection_output")
+        # Store current classification in session.state for the after_agent_callback
+        # The callback will handle accumulation and index increment
+        ctx.session.state["current_classification"] = result.model_dump()
 
-        if not existing_collection:
-            final_classifications_data = ctx.session.state.get("final_classifications")
-            if final_classifications_data:
-                try:
-                    existing_collection = ClassificationCollectionOutput.model_validate(
-                        final_classifications_data
-                    )
-                except Exception:
-                    existing_collection = None
-
-        if existing_collection:
-            all_classifications = existing_collection.classifications + [result]
-        else:
-            all_classifications = [result]
-
-        collection_output = ClassificationCollectionOutput(
-            count=len(all_classifications), classifications=all_classifications
-        )
-
+        # Also store in agent_states for immediate access by downstream code
         ctx.agent_states[self.name] = {
             "current_classification": result,
-            "collection_output": collection_output,
         }
-
-        ctx.session.state["final_classifications"] = collection_output.model_dump()
-        ctx.session.state["current_email_index"] = current_index + 1
 
         yield Event(
             invocation_id=ctx.invocation_id,
@@ -235,6 +235,20 @@ class EmailClassifierAgent(BaseAgent):
                 parts=[types.Part(text=result.model_dump_json(indent=2))]
             ),
         )
+
+        # Invoke after_agent_callback for accumulation and state updates
+        if self._after_agent_callback:
+            # Create a callback context from the invocation context
+            callback_ctx = CallbackContext(ctx)
+            callback_result = self._after_agent_callback(callback_ctx)
+            if callback_result:
+                # If callback returns content, yield it as an additional event
+                yield Event(
+                    invocation_id=ctx.invocation_id,
+                    author=self.name,
+                    branch=ctx.branch,
+                    content=callback_result,
+                )
 
 
 # Create a default instance
