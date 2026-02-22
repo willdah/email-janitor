@@ -20,7 +20,7 @@ from simplegmail.message import Message
 from ..callbacks import cleanup_llm_json_callback
 from ..config import EmailClassifierConfig
 from ..instructions.email_classifier_agent import build_instruction
-from ..models.schemas import (
+from ..schemas.schemas import (
     ClassificationResult,
     EmailCategory,
     EmailClassificationInput,

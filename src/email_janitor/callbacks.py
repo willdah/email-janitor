@@ -14,7 +14,7 @@ from google.adk.agents.callback_context import CallbackContext
 from google.adk.models import LlmResponse
 from google.genai import types
 
-from .models.schemas import (
+from .schemas.schemas import (
     ClassificationCollectionOutput,
     EmailCollectionOutput,
 )

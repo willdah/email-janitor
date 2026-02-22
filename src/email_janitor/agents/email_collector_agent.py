@@ -20,7 +20,7 @@ from google.genai import types
 from simplegmail.message import Message
 
 from ..config import EmailCollectorConfig
-from ..models.schemas import EmailCollectionOutput, EmailData
+from ..schemas.schemas import EmailCollectionOutput, EmailData
 from ..tools.gmail_client import get_unread_emails
 
 

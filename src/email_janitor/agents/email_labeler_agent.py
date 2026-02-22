@@ -15,7 +15,7 @@ from google.genai import types
 from simplegmail.message import Message
 
 from ..config import EmailLabelerConfig
-from ..models.schemas import (
+from ..schemas.schemas import (
     ClassificationCollectionOutput,
     EmailCategory,
     ProcessingResult,
