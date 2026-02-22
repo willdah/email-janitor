@@ -1,4 +1,7 @@
-.PHONY: install run lint format test clean auth
+IMAGE ?= email-janitor
+TAG ?= latest
+
+.PHONY: install run lint format test clean auth docker-build docker-push
 
 install:
 	uv sync --group dev
@@ -20,3 +23,9 @@ clean:
 
 auth:
 	uv run python gmail_auth.py
+
+docker-build:
+	docker build --platform linux/amd64 -t $(IMAGE):$(TAG) .
+
+docker-push:
+	docker push $(IMAGE):$(TAG)

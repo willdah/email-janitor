@@ -12,7 +12,7 @@ class AppConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="EMAIL_JANITOR_", case_sensitive=False, extra="ignore")
 
     app_name: str = Field(
-        default="Email-Janitor",
+        default="EmailJanitor",
         description="Application name passed to the ADK runner",
     )
     user_id: str = Field(
