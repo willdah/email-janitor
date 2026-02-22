@@ -9,4 +9,4 @@ services:
     volumes:
       - ./client_secret.json:/app/client_secret.json
       - ./gmail_token.json:/app/gmail_token.json
-    command: ["python", "-m", "email_janitor.main"]
+    command: ["email-janitor"]

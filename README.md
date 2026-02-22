@@ -4,23 +4,23 @@ Agentic solution that cleans up your email inbox.
 
 ## Description
 
-Email Janitor is an agentic pipeline that collects unread emails from your Gmail inbox, classifies each message (ACTIONABLE, INFORMATIONAL, PROMOTIONAL, or NOISE) using an LLM classifier, then applies Gmail labels and archives messages accordingly. Processed messages are tagged with `EmailJanitor-Processed` so they are skipped on subsequent runs.
+Email Janitor is an agentic pipeline that collects unread emails from your Gmail inbox, classifies each message (ACTIONABLE, INFORMATIONAL, PROMOTIONAL, or NOISE) using an LLM classifier, then applies Gmail labels and archives messages accordingly. Processed messages are tagged with `janitor/done` so they are skipped on subsequent runs.
 
 The app runs in a loop (e.g. every 10 seconds), processing new unread mail each cycle. It uses [Google ADK](https://github.com/google/adk) with [LiteLLM](https://docs.litellm.ai/) (Ollama by default) for local, privacy-preserving classification.
 
 ## Features
 
 - **Gmail inbox collection** — Unread messages from inbox only; excludes sent mail and already-processed messages.
-- **LLM classification** — Direct classification using an LLM classifier.
-- **Configurable thresholds** — Confidence threshold via env.
-- **Label-based organization** — Applies category labels and `EmailJanitor-Processed`; can archive by removing INBOX.
+- **LLM classification** — Per-email classification using a configurable LiteLLM-backed model.
+- **Configurable thresholds** — Confidence threshold and model via environment variables.
+- **Nested Gmail labels** — Applies `janitor/*` category labels and archives non-actionable mail.
 - **Docker / Docker Compose** — Run via Compose with mounted Gmail credentials.
 
 ## Prerequisites
 
 - **Python** ≥ 3.12
-- **Ollama** with `llama3.1:8b` (or pull equivalent models used by the classifier)
-- **Gmail API** — OAuth client credentials, `client_secret.json`, and `gmail_token.json` (from the [simplegmail](https://github.com/jeremyephron/simplegmail) OAuth flow)
+- **Ollama** with `llama3.1:8b` pulled, or another [LiteLLM](https://docs.litellm.ai/)-compatible provider
+- **Gmail API** — OAuth client credentials (`client_secret.json` and `gmail_token.json`) via the [simplegmail](https://github.com/jeremyephron/simplegmail) OAuth flow
 - **Environment** — `.env` supported via `python-dotenv` (see [Configuration](#configuration))
 
 ## Installation
@@ -28,49 +28,62 @@ The app runs in a loop (e.g. every 10 seconds), processing new unread mail each 
 Clone the repository, then install dependencies with [uv](https://docs.astral.sh/uv/):
 
 ```bash
-uv sync
-```
-
-Alternatively, use pip:
-
-```bash
-pip install -e .
+make install
+# or: uv sync --group dev
 ```
 
 ## Configuration
 
-### Gmail
+All configuration is optional — defaults are production-ready for Ollama.
 
-Place `client_secret.json` and `gmail_token.json` in the project root (or wherever the app and [Gmail client](email_janitor/tools/gmail_client.py) expect them). For Docker, mount these into the container (see [Usage](#docker)).
+### Gmail credentials
 
-### Models
+Place `client_secret.json` and `gmail_token.json` in the project root. For Docker, they are mounted into the container (see [compose.yml](compose.yml)).
 
-The app uses LiteLLM with Ollama. The classifier model is set in the [classification coordinator](email_janitor/sub_agents/classification_coordinator.py) (e.g. `ollama_chat/llama3.1:8b`). You can switch to other LiteLLM-backed providers (e.g. OpenAI) by changing the model ID and setting the appropriate API keys.
+Run the auth flow once to generate `gmail_token.json`:
 
-### Classification
+```bash
+make auth
+```
 
-[`ClassificationConfig`](email_janitor/config.py) reads from environment variables with the `CLASSIFICATION_` prefix:
+### Environment variables
 
-| Variable                              | Description                                         | Default |
-| ------------------------------------- | --------------------------------------------------- | ------- |
-| `CLASSIFICATION_CONFIDENCE_THRESHOLD` | Confidence threshold for classification (1-5 scale) | `4.0`   |
+Copy `.env.example` to `.env` and adjust as needed.
 
-See [`.env.example`](.env.example) for a template. Copy to `.env` and adjust as needed.
+#### App (`EMAIL_JANITOR_` prefix)
+
+| Variable                    | Description                            | Default              |
+| --------------------------- | -------------------------------------- | -------------------- |
+| `EMAIL_JANITOR_POLL_INTERVAL` | Seconds between processing runs      | `10`                 |
+| `EMAIL_JANITOR_USER_ID`     | User ID for ADK session management     | `email-janitor-user` |
+| `EMAIL_JANITOR_APP_NAME`    | Application name passed to ADK runner (must be a valid identifier)  | `EmailJanitor`      |
+
+#### Classifier (`EMAIL_CLASSIFIER_` prefix)
+
+| Variable                              | Description                                         | Default                    |
+| ------------------------------------- | --------------------------------------------------- | -------------------------- |
+| `EMAIL_CLASSIFIER_MODEL`              | LiteLLM model ID                                    | `ollama_chat/llama3.1:8b`  |
+| `EMAIL_CLASSIFIER_CONFIDENCE_THRESHOLD` | Minimum confidence to accept a classification (1–5) | `4.0`                    |
+
+#### Gmail (`GMAIL_` prefix)
+
+| Variable                    | Description                                    | Default                |
+| --------------------------- | ---------------------------------------------- | ---------------------- |
+| `GMAIL_PROCESSED_LABEL`     | Label applied to every processed email         | `janitor/done`         |
+| `GMAIL_NOISE_LABEL`         | Label applied to NOISE emails                  | `janitor/noise`        |
+| `GMAIL_PROMOTIONAL_LABEL`   | Label applied to PROMOTIONAL emails            | `janitor/promotions`   |
+| `GMAIL_INFORMATIONAL_LABEL` | Label applied to INFORMATIONAL emails          | `janitor/newsletters`  |
+| `GMAIL_INBOX_QUERY`         | Base Gmail search query for fetching emails    | `in:inbox -in:sent`    |
+
+Labels are created automatically if they don't exist. The `janitor/*` hierarchy appears as a collapsible `janitor` parent in the Gmail sidebar.
 
 ## Usage
 
 ### Local
 
-From the project root:
-
 ```bash
-uv run python -m email_janitor.main
-```
-
-Or, with the venv activated:
-
-```bash
-python -m email_janitor.main
+make run
+# or: uv run email-janitor
 ```
 
 The agent runs in a loop (default 10 seconds between runs). Press `Ctrl+C` to stop.
@@ -83,38 +96,61 @@ Build and run with Docker Compose:
 docker compose up
 ```
 
-Ensure `client_secret.json` and `gmail_token.json` exist in the project root. They are mounted into the container per [compose.yml](compose.yml). `GOOGLE_APPLICATION_CREDENTIALS` is set to `/app/client_secret.json` for the Gmail service.
+Or build the image directly:
+
+```bash
+make docker-build                                        # image=email-janitor:latest
+make docker-build IMAGE=ghcr.io/you/email-janitor TAG=1.0.0
+```
+
+Push to a registry:
+
+```bash
+make docker-push IMAGE=ghcr.io/you/email-janitor TAG=1.0.0
+```
 
 ## Architecture
 
-The root agent is a **sequential pipeline**:
+The root agent is a **SequentialAgent** pipeline:
 
-1. **EmailCollector** — Fetches unread emails from Gmail (inbox, excluding sent and already processed).
-2. **EmailLoopCoordinator** — Initializes shared state for the classification loop.
-3. **EmailClassificationLoop** — Loop agent that classifies emails one-by-one using a **ClassificationCoordinator**.
-4. **EmailProcessor** — Applies labels and archiving based on the classification results.
+1. **EmailCollectorAgent** — Fetches unread emails from Gmail (inbox, excluding sent and already processed). Stores results in session state and agent state.
+2. **EmailClassifierLoopAgent** — A `LoopAgent` that classifies emails one-by-one. On each iteration, `EmailClassifierAgent`:
+   - Checks whether all emails have been classified; escalates to end the loop if so.
+   - Delegates to a pre-built `LlmAgent` sub-agent with a dynamic per-email prompt.
+   - Accumulates results into session state.
+3. **EmailLabelerAgent** — Reads all accumulated classifications and applies Gmail labels:
+   - `NOISE` → `janitor/noise`, archived
+   - `PROMOTIONAL` → `janitor/promotions`, archived
+   - `INFORMATIONAL` → `janitor/newsletters`, archived
+   - `ACTIONABLE` → left in inbox
+   - All emails receive `janitor/done` to prevent reprocessing.
 
 ```mermaid
 flowchart LR
-    A[EmailCollector] --> B[EmailLoopCoordinator]
-    B --> C[EmailClassificationLoop]
-    C --> D[EmailProcessor]
+    A[EmailCollectorAgent] --> B[EmailClassifierLoopAgent]
+    B --> C[EmailLabelerAgent]
+    subgraph B[EmailClassifierLoopAgent]
+        D[EmailClassifierAgent] -->|escalate when done| B
+    end
 ```
 
-See [agent.py](email_janitor/agent.py) for the agent graph and [docs/design/email_processor_flow.excalidraw](docs/design/email_processor_flow.excalidraw) for the design sketch.
+Configuration lives in [`src/email_janitor/config/`](src/email_janitor/config/) as Pydantic Settings classes. Agents are defined in [`src/email_janitor/agents/`](src/email_janitor/agents/) and created via factory functions.
 
 ## Development
 
-- **Lint:** `ruff check .`
-- **Tests:** `pytest`
-- **Editable install:** `uv sync` (or `pip install -e .`)
+```bash
+make lint      # ruff check
+make format    # ruff format
+make test      # pytest
+make clean     # remove .venv, caches
+```
+
+## Troubleshooting
+
+- **Gmail OAuth:** Ensure `client_secret.json` and `gmail_token.json` are valid and not expired. Re-run `make auth` if needed.
+- **Ollama:** Confirm Ollama is running and the model is available (`ollama pull llama3.1:8b`).
+- **Labels:** Labels are created automatically; ensure the Gmail account has permission to manage labels.
 
 ## License
 
 MIT. See [LICENSE](LICENSE) for details.
-
-## Troubleshooting
-
-- **Gmail OAuth:** Ensure `client_secret.json` and `gmail_token.json` are valid and not expired. Re-run the simplegmail OAuth flow if needed.
-- **Ollama:** Confirm Ollama is running and `llama3.1:8b` is available (`ollama pull llama3.1:8b`).
-- **Labels:** The app creates Gmail labels (e.g. `EmailJanitor-Processed`, category labels) if they do not exist; ensure the Gmail account has permission to manage labels.

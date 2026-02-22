@@ -9,13 +9,12 @@ previously embedded in custom agents:
 """
 
 import re
-from typing import Optional
 
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models import LlmResponse
 from google.genai import types
 
-from .models.schemas import (
+from ..schemas.schemas import (
     ClassificationCollectionOutput,
     EmailCollectionOutput,
 )
@@ -23,7 +22,7 @@ from .models.schemas import (
 
 def initialize_loop_state_callback(
     callback_context: CallbackContext,
-) -> Optional[types.Content]:
+) -> types.Content | None:
     """
     Before-agent callback that initializes loop state for email processing.
 
@@ -39,32 +38,18 @@ def initialize_loop_state_callback(
     # Retrieve collection output from session state (stored by EmailCollectorAgent)
     collector_output_data = callback_context.state.get("collector_output")
     if not collector_output_data:
-        return types.Content(
-            parts=[
-                types.Part(
-                    text="No emails found. EmailCollectorAgent must run first."
-                )
-            ]
-        )
+        return types.Content(parts=[types.Part(text="No emails found. EmailCollectorAgent must run first.")])
 
     # Parse the collection output from serialized dict
     try:
         collection_output = EmailCollectionOutput.model_validate(collector_output_data)
     except Exception:
-        return types.Content(
-            parts=[
-                types.Part(
-                    text="Invalid email collection output format."
-                )
-            ]
-        )
+        return types.Content(parts=[types.Part(text="Invalid email collection output format.")])
 
     email_count = len(collection_output.emails)
 
     if email_count == 0:
-        return types.Content(
-            parts=[types.Part(text="No emails to process. Skipping loop.")]
-        )
+        return types.Content(parts=[types.Part(text="No emails to process. Skipping loop.")])
 
     # Check if state is already initialized (avoid re-initialization on loop iterations)
     if callback_context.state.get("current_email_index") is None:
@@ -79,7 +64,7 @@ def initialize_loop_state_callback(
 def cleanup_llm_json_callback(
     callback_context: CallbackContext,
     llm_response: LlmResponse,
-) -> Optional[LlmResponse]:
+) -> LlmResponse | None:
     """
     After-model callback that cleans up JSON from LLM responses.
 
@@ -136,7 +121,7 @@ def cleanup_llm_json_callback(
 
 def accumulate_classifications_callback(
     callback_context: CallbackContext,
-) -> Optional[types.Content]:
+) -> types.Content | None:
     """
     After-agent callback that accumulates classification results.
 
@@ -167,12 +152,9 @@ def accumulate_classifications_callback(
 
     if existing_data:
         try:
-            existing_collection = ClassificationCollectionOutput.model_validate(
-                existing_data
-            )
+            existing_collection = ClassificationCollectionOutput.model_validate(existing_data)
             existing_classifications = [
-                c.model_dump() if hasattr(c, "model_dump") else c
-                for c in existing_collection.classifications
+                c.model_dump() if hasattr(c, "model_dump") else c for c in existing_collection.classifications
             ]
         except Exception:
             pass

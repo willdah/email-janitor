@@ -1,13 +1,16 @@
 from simplegmail import Gmail
 from simplegmail.message import Message
 
+from ..config import GmailConfig
 
 gmail: Gmail | None = None
+_config = GmailConfig()
 
 
 def get_gmail_client():
     """
-    Returns a Gmail client instance. If the client is not initialized, it will be initialized using the client_secret.json file.
+    Returns a Gmail client instance. If the client is not initialized, it will be
+    initialized using the client_secret.json file.
     """
     global gmail
     if gmail is None:
@@ -18,13 +21,12 @@ def get_gmail_client():
 def get_unread_emails() -> list[Message]:
     """
     Uses the Gmail client to get a list of unread emails from the inbox only.
-    Filters out sent messages and already processed emails using Gmail's query syntax for efficient server-side filtering.
+    Filters out sent messages and already processed emails using Gmail's query syntax
+    for efficient server-side filtering.
     """
     gmail: Gmail = get_gmail_client()
-    # Use Gmail query syntax to filter: in inbox, not in sent folder, and not already processed
-    unread_emails: list[Message] = gmail.get_unread_messages(
-        query="in:inbox -in:sent -label:EmailJanitor-Processed"
-    )
+    query = f'{_config.inbox_query} -label:"{_config.processed_label}"'
+    unread_emails: list[Message] = gmail.get_unread_messages(query=query)
     return unread_emails
 
 
@@ -55,15 +57,11 @@ def get_label_id_by_name(label_name: str) -> str:
         "labelListVisibility": "labelShow",
         "messageListVisibility": "show",
     }
-    created_label = (
-        service.users().labels().create(userId="me", body=label_obj).execute()
-    )
+    created_label = service.users().labels().create(userId="me", body=label_obj).execute()
     return created_label["id"]
 
 
-def apply_label_to_message(
-    message: Message, label_name: str, remove_inbox: bool = False
-) -> None:
+def apply_label_to_message(message: Message, label_name: str, remove_inbox: bool = False) -> None:
     """
     Applies a label to a Gmail message by name. The label will be created if it doesn't exist.
     This operation does not mark the email as read.
@@ -88,6 +86,4 @@ def apply_label_to_message(
 
     # Apply the label using the Gmail API modify method
     # This only adds/removes labels and doesn't affect read status
-    service.users().messages().modify(
-        userId="me", id=message.id, body=modify_body
-    ).execute()
+    service.users().messages().modify(userId="me", id=message.id, body=modify_body).execute()

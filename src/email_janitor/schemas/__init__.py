@@ -1,12 +1,12 @@
 """Pydantic models for agent data contracts."""
 
 from .schemas import (
-    EmailData,
-    EmailCollectionOutput,
+    ClassificationCollectionOutput,
+    ClassificationResult,
     EmailClassificationInput,
     EmailClassificationOutput,
-    ClassificationResult,
-    ClassificationCollectionOutput,
+    EmailCollectionOutput,
+    EmailData,
     ProcessingResult,
     ProcessingSummaryOutput,
 )
