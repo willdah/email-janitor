@@ -18,9 +18,7 @@ load_dotenv()
 # Define the main function
 async def main():
     """Main event loop for the email janitor agent."""
-    start_message = types.Content(
-        parts=[types.Part(text="Begin the email janitor process.")]
-    )
+    start_message = types.Content(parts=[types.Part(text="Begin the email janitor process.")])
     runner = InMemoryRunner(app_name=APP_NAME, app=app)
 
     # Continuously run the agent until the user exits

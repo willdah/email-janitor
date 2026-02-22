@@ -1,15 +1,15 @@
-from .sub_agents.email_collector_agent import email_collector_agent
-from .sub_agents.email_labeler_agent import email_labeler_agent
-from .sub_agents.email_classifier_agent import EmailClassifierAgent
-from .config import ClassificationConfig
-from .callbacks import (
-    initialize_loop_state_callback,
-    accumulate_classifications_callback,
-)
-from google.adk.agents.sequential_agent import SequentialAgent
 from google.adk.agents.loop_agent import LoopAgent
+from google.adk.agents.sequential_agent import SequentialAgent
 from google.adk.apps import App
 
+from .callbacks import (
+    accumulate_classifications_callback,
+    initialize_loop_state_callback,
+)
+from .config import ClassificationConfig
+from .sub_agents.email_classifier_agent import EmailClassifierAgent
+from .sub_agents.email_collector_agent import email_collector_agent
+from .sub_agents.email_labeler_agent import email_labeler_agent
 
 # Create the email classifier agent with after_agent_callback for accumulation
 # The callback runs after each classification to accumulate results
@@ -33,7 +33,10 @@ email_classifier_loop_agent = LoopAgent(
 # Note: EmailLoopAgent has been replaced by before_agent_callback on the loop agent
 root_agent = SequentialAgent(
     name="EmailJanitor",
-    description="A root agent that orchestrates the email janitor process: collects emails, classifies them in a loop, then processes all classifications.",
+    description=(
+        "A root agent that orchestrates the email janitor process: collects emails,"
+        " classifies them in a loop, then processes all classifications."
+    ),
     sub_agents=[
         email_collector_agent,  # Step 1: Collect all unread emails
         email_classifier_loop_agent,  # Step 2: Loop that classifies emails one at a time (with state init callback)

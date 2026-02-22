@@ -5,11 +5,13 @@ This agent initializes the state for the loop (current_email_index) and ensures
 EmailCollector has run successfully before the loop begins.
 """
 
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
+
 from google.adk.agents.base_agent import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events.event import Event
 from google.genai import types
+
 from ..models.schemas import EmailCollectionOutput
 
 
@@ -34,17 +36,13 @@ class EmailLoopAgent(BaseAgent):
             name: The name of the agent (default: "EmailLoopCoordinator")
             description: Optional description of the agent
         """
-        default_description = (
-            "An agent that initializes state for the email processing loop."
-        )
+        default_description = "An agent that initializes state for the email processing loop."
         super().__init__(
             name=name,
             description=description or default_description,
         )
 
-    async def _run_async_impl(
-        self, ctx: InvocationContext
-    ) -> AsyncGenerator[Event, None]:
+    async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
         """
         Custom execution logic for the EmailLoopCoordinator agent.
 
@@ -65,20 +63,14 @@ class EmailLoopAgent(BaseAgent):
                 author=self.name,
                 branch=ctx.branch,
                 content=types.Content(
-                    parts=[
-                        types.Part(
-                            text="No emails found. EmailCollectorAgent must run first."
-                        )
-                    ]
+                    parts=[types.Part(text="No emails found. EmailCollectorAgent must run first.")]
                 ),
             )
             yield event
             return
 
         # Get structured output from EmailCollectorAgent
-        collection_output: EmailCollectionOutput | None = collector_state.get(
-            "collection_output"
-        )
+        collection_output: EmailCollectionOutput | None = collector_state.get("collection_output")
         if not collection_output:
             event = Event(
                 invocation_id=ctx.invocation_id,

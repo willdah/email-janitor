@@ -6,19 +6,21 @@ applies appropriate Gmail labels to each email based on the classification categ
 All emails remain unread after processing.
 """
 
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
+
 from google.adk.agents.base_agent import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events.event import Event
 from google.genai import types
 from simplegmail.message import Message
-from ..tools.gmail_client import apply_label_to_message
+
 from ..models.schemas import (
     ClassificationCollectionOutput,
+    EmailCategory,
     ProcessingResult,
     ProcessingSummaryOutput,
-    EmailCategory,
 )
+from ..tools.gmail_client import apply_label_to_message
 
 
 class EmailLabelerAgent(BaseAgent):
@@ -47,15 +49,15 @@ class EmailLabelerAgent(BaseAgent):
             name: The name of the agent (default: "EmailProcessor")
             description: Optional description of the agent
         """
-        default_description = "An agent that processes emails based on classifications and applies appropriate Gmail labels."
+        default_description = (
+            "An agent that processes emails based on classifications and applies appropriate Gmail labels."
+        )
         super().__init__(
             name=name,
             description=description or default_description,
         )
 
-    async def _run_async_impl(
-        self, ctx: InvocationContext
-    ) -> AsyncGenerator[Event, None]:
+    async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
         """
         Custom execution logic for the EmailProcessor agent.
 
@@ -114,9 +116,7 @@ class EmailLabelerAgent(BaseAgent):
                 invocation_id=ctx.invocation_id,
                 author=self.name,
                 branch=ctx.branch,
-                content=types.Content(
-                    parts=[types.Part(text="No classifications to process.")]
-                ),
+                content=types.Content(parts=[types.Part(text="No classifications to process.")]),
             )
             yield event
             return
@@ -130,11 +130,7 @@ class EmailLabelerAgent(BaseAgent):
                 author=self.name,
                 branch=ctx.branch,
                 content=types.Content(
-                    parts=[
-                        types.Part(
-                            text="No emails found. EmailCollectorAgent must run first."
-                        )
-                    ]
+                    parts=[types.Part(text="No emails found. EmailCollectorAgent must run first.")]
                 ),
             )
             yield event
@@ -176,9 +172,7 @@ class EmailLabelerAgent(BaseAgent):
                 if classification_category == EmailCategory.NOISE:
                     apply_label_to_message(message, "Noise", remove_inbox=True)
                     # Mark as processed to prevent reprocessing
-                    apply_label_to_message(
-                        message, "EmailJanitor-Processed", remove_inbox=False
-                    )
+                    apply_label_to_message(message, "EmailJanitor-Processed", remove_inbox=False)
                     label_counts["Noise"] += 1
                     processing_results.append(
                         ProcessingResult(
@@ -193,9 +187,7 @@ class EmailLabelerAgent(BaseAgent):
                 elif classification_category == EmailCategory.PROMOTIONAL:
                     apply_label_to_message(message, "Promotions", remove_inbox=True)
                     # Mark as processed to prevent reprocessing
-                    apply_label_to_message(
-                        message, "EmailJanitor-Processed", remove_inbox=False
-                    )
+                    apply_label_to_message(message, "EmailJanitor-Processed", remove_inbox=False)
                     label_counts["Promotions"] += 1
                     processing_results.append(
                         ProcessingResult(
@@ -210,9 +202,7 @@ class EmailLabelerAgent(BaseAgent):
                 elif classification_category == EmailCategory.INFORMATIONAL:
                     apply_label_to_message(message, "Newsletters", remove_inbox=True)
                     # Mark as processed to prevent reprocessing
-                    apply_label_to_message(
-                        message, "EmailJanitor-Processed", remove_inbox=False
-                    )
+                    apply_label_to_message(message, "EmailJanitor-Processed", remove_inbox=False)
                     label_counts["Newsletters"] += 1
                     processing_results.append(
                         ProcessingResult(
@@ -226,9 +216,7 @@ class EmailLabelerAgent(BaseAgent):
                     )
                 elif classification_category == EmailCategory.ACTIONABLE:
                     # Mark as processed to prevent reprocessing (leave in inbox)
-                    apply_label_to_message(
-                        message, "EmailJanitor-Processed", remove_inbox=False
-                    )
+                    apply_label_to_message(message, "EmailJanitor-Processed", remove_inbox=False)
                     label_counts["ACTIONABLE"] += 1
                     processing_results.append(
                         ProcessingResult(

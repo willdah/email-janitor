@@ -11,14 +11,16 @@ This is a deterministic agent that always fetches unread emails when called,
 without using an LLM for decision-making.
 """
 
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
+
 from google.adk.agents.base_agent import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events.event import Event
 from google.genai import types
 from simplegmail.message import Message
+
+from ..models.schemas import EmailCollectionOutput, EmailData
 from ..tools.gmail_client import get_unread_emails
-from ..models.schemas import EmailData, EmailCollectionOutput
 
 
 class EmailCollectorAgent(BaseAgent):
@@ -45,15 +47,15 @@ class EmailCollectorAgent(BaseAgent):
             name: The name of the agent (default: "EmailCollector")
             description: Optional description of the agent
         """
-        default_description = "An agent specialized in fetching and collecting unread emails from your inbox."
+        default_description = (
+            "An agent specialized in fetching and collecting unread emails from your inbox."
+        )
         super().__init__(
             name=name,
             description=description or default_description,
         )
 
-    async def _run_async_impl(
-        self, ctx: InvocationContext
-    ) -> AsyncGenerator[Event, None]:
+    async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
         """
         Custom execution logic for the EmailCollector agent.
 

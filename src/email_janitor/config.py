@@ -3,8 +3,6 @@
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .models.schemas import EmailCategory
-
 
 class ClassificationConfig(BaseSettings):
     """Configuration for email classification.

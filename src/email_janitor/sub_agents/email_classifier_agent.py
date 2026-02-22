@@ -6,7 +6,7 @@ This coordinator classifies emails using an LLM classifier.
 
 import re
 import uuid
-from typing import AsyncGenerator, Callable, Optional
+from collections.abc import AsyncGenerator, Callable
 
 from google.adk.agents.base_agent import BaseAgent
 from google.adk.agents.callback_context import CallbackContext
@@ -19,6 +19,7 @@ from simplegmail.message import Message
 
 from ..callbacks import cleanup_llm_json_callback
 from ..config import ClassificationConfig
+from ..instructions.email_classifier_agent import build_instruction
 from ..models.schemas import (
     ClassificationResult,
     EmailCategory,
@@ -27,10 +28,9 @@ from ..models.schemas import (
     EmailCollectionOutput,
     EmailData,
 )
-from ..instructions.email_classifier_agent import build_instruction
 
 # Type alias for callback functions
-AfterAgentCallback = Callable[[CallbackContext], Optional[types.Content]]
+AfterAgentCallback = Callable[[CallbackContext], types.Content | None]
 
 
 class EmailClassifierAgent(BaseAgent):
@@ -57,9 +57,7 @@ class EmailClassifierAgent(BaseAgent):
             name=name,
             description=description or "Coordinates email classification.",
         )
-        self._classifier_model = classifier_model or LiteLlm(
-            model="ollama_chat/llama3.1:8b"
-        )
+        self._classifier_model = classifier_model or LiteLlm(model="ollama_chat/llama3.1:8b")
         self._config = config or ClassificationConfig()
         self._after_agent_callback = after_agent_callback
 
@@ -99,9 +97,7 @@ class EmailClassifierAgent(BaseAgent):
             name=unique_agent_id,
             instruction=build_instruction(classification_input),
             output_schema=EmailClassificationOutput,
-            generate_content_config=types.GenerateContentConfig(
-                temperature=0.4, top_k=10
-            ),
+            generate_content_config=types.GenerateContentConfig(temperature=0.4, top_k=10),
             # Use callback to clean JSON from markdown code blocks
             after_model_callback=cleanup_llm_json_callback,
         )
@@ -114,8 +110,8 @@ class EmailClassifierAgent(BaseAgent):
                 try:
                     # Fallback cleanup in case callback didn't catch everything
                     clean_json = self._extract_clean_json(raw_text)
-                    classification_output = (
-                        EmailClassificationOutput.model_validate_json(clean_json)
+                    classification_output = EmailClassificationOutput.model_validate_json(
+                        clean_json
                     )
                 except Exception as e:
                     classification_output = EmailClassificationOutput(
@@ -153,9 +149,7 @@ class EmailClassifierAgent(BaseAgent):
             refinement_count=0,
         )
 
-    async def _run_async_impl(
-        self, ctx: InvocationContext
-    ) -> AsyncGenerator[Event, None]:
+    async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
         """
         Main execution logic for the classifier.
 
@@ -193,9 +187,7 @@ class EmailClassifierAgent(BaseAgent):
                 invocation_id=ctx.invocation_id,
                 author=self.name,
                 branch=ctx.branch,
-                content=types.Content(
-                    parts=[types.Part(text="All emails classified.")]
-                ),
+                content=types.Content(parts=[types.Part(text="All emails classified.")]),
             )
             event.actions.escalate = True
             yield event
@@ -231,9 +223,7 @@ class EmailClassifierAgent(BaseAgent):
             invocation_id=ctx.invocation_id,
             author=self.name,
             branch=ctx.branch,
-            content=types.Content(
-                parts=[types.Part(text=result.model_dump_json(indent=2))]
-            ),
+            content=types.Content(parts=[types.Part(text=result.model_dump_json(indent=2))]),
         )
 
         # Invoke after_agent_callback for accumulation and state updates

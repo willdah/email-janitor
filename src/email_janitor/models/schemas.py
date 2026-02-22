@@ -2,7 +2,6 @@
 
 from datetime import datetime
 from enum import Enum
-from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -23,9 +22,9 @@ class EmailData(BaseModel):
     sender: str = Field(description="Email sender address")
     recipient: str = Field(description="Email recipient address")
     subject: str = Field(description="Email subject line")
-    date: Optional[datetime] = Field(default=None, description="Email date")
-    snippet: Optional[str] = Field(default=None, description="Email snippet/preview")
-    thread_id: Optional[str] = Field(default=None, description="Gmail thread ID")
+    date: datetime | None = Field(default=None, description="Email date")
+    snippet: str | None = Field(default=None, description="Email snippet/preview")
+    thread_id: str | None = Field(default=None, description="Gmail thread ID")
     labels: list[str] = Field(default_factory=list, description="Gmail labels")
 
 
@@ -41,24 +40,16 @@ class EmailClassificationInput(BaseModel):
 
     sender: str = Field(description="Email sender address")
     subject: str = Field(description="Email subject line")
-    body: Optional[str] = Field(
-        default=None, description="Email body text (truncated if long)"
-    )
-    snippet: Optional[str] = Field(
-        default=None, description="Email snippet if body not available"
-    )
+    body: str | None = Field(default=None, description="Email body text (truncated if long)")
+    snippet: str | None = Field(default=None, description="Email snippet if body not available")
 
 
 class EmailClassificationOutput(BaseModel):
     """Output schema for EmailClassifier LLM sub-agent."""
 
     category: EmailCategory = Field(description="Classification category")
-    reasoning: str = Field(
-        description="One-sentence explanation citing specific keywords found"
-    )
-    confidence: float = Field(
-        default=3.0, ge=1.0, le=5.0, description="Confidence score 1-5"
-    )
+    reasoning: str = Field(description="One-sentence explanation citing specific keywords found")
+    confidence: float = Field(default=3.0, ge=1.0, le=5.0, description="Confidence score 1-5")
     keywords_found: list[str] = Field(
         default_factory=list, description="Key terms that influenced classification"
     )
@@ -72,12 +63,8 @@ class ClassificationResult(BaseModel):
     subject: str = Field(description="Email subject line")
     classification: EmailCategory = Field(description="Classification category")
     reasoning: str = Field(description="Classification reasoning")
-    confidence: float = Field(
-        default=3.0, ge=1.0, le=5.0, description="Confidence score 1-5"
-    )
-    refinement_count: int = Field(
-        default=0, ge=0, description="Number of refinement iterations"
-    )
+    confidence: float = Field(default=3.0, ge=1.0, le=5.0, description="Confidence score 1-5")
+    refinement_count: int = Field(default=0, ge=0, description="Number of refinement iterations")
 
 
 class ClassificationCollectionOutput(BaseModel):
@@ -106,6 +93,4 @@ class ProcessingSummaryOutput(BaseModel):
     total_processed: int = Field(description="Total number of emails processed")
     label_counts: dict[str, int] = Field(description="Count of emails per label/action")
     errors_count: int = Field(description="Number of errors encountered")
-    errors: Optional[list[str]] = Field(
-        default=None, description="List of error messages if any"
-    )
+    errors: list[str] | None = Field(default=None, description="List of error messages if any")
