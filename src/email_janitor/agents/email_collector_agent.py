@@ -19,6 +19,7 @@ from google.adk.events.event import Event
 from google.genai import types
 from simplegmail.message import Message
 
+from ..config import EmailCollectorConfig
 from ..models.schemas import EmailCollectionOutput, EmailData
 from ..tools.gmail_client import get_unread_emails
 
@@ -37,16 +38,10 @@ class EmailCollectorAgent(BaseAgent):
 
     def __init__(
         self,
+        config: EmailCollectorConfig,
         name: str = "EmailCollectorAgent",
         description: str | None = None,
     ):
-        """
-        Initialize the EmailCollector agent.
-
-        Args:
-            name: The name of the agent (default: "EmailCollector")
-            description: Optional description of the agent
-        """
         default_description = (
             "An agent specialized in fetching and collecting unread emails from your inbox."
         )
@@ -54,6 +49,7 @@ class EmailCollectorAgent(BaseAgent):
             name=name,
             description=description or default_description,
         )
+        self._config = config
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
         """
@@ -133,18 +129,14 @@ class EmailCollectorAgent(BaseAgent):
 
         yield event
 
-    def fetch_emails(self):
-        """
-        Direct method to fetch unread emails using the email client tools.
-
-        This is a convenience method that bypasses the agent orchestration
-        for direct programmatic access to email fetching.
-
-        Returns:
-            A list of unread email messages.
-        """
-        return get_unread_emails()
-
-
-# Create a default instance
-email_collector_agent = EmailCollectorAgent()
+def create_email_collector_agent(
+    config: EmailCollectorConfig | None = None,
+    name: str = "EmailCollectorAgent",
+    description: str | None = None,
+) -> EmailCollectorAgent:
+    """Factory function for EmailCollectorAgent."""
+    return EmailCollectorAgent(
+        config=config or EmailCollectorConfig(),
+        name=name,
+        description=description,
+    )

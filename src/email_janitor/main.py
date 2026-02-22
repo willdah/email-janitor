@@ -1,21 +1,22 @@
 import asyncio
 
 from dotenv import load_dotenv
+from google.adk.apps import App
 from google.adk.runners import InMemoryRunner
 from google.genai import types
 
-from email_janitor.agent import app
+from email_janitor.agent import root_agent
 
 # Constants
 APP_NAME = "Email-Janitor"
 USER_ID = "email-janitor-user"
-SESSION_ID = "email-janitor-session"
 
 # Load environment variables
 load_dotenv()
 
+app = App(name="email_janitor", root_agent=root_agent)
 
-# Define the main function
+
 async def main():
     """Main event loop for the email janitor agent."""
     start_message = types.Content(parts=[types.Part(text="Begin the email janitor process.")])

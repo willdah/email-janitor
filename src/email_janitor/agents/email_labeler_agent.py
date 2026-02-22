@@ -1,5 +1,5 @@
 """
-EmailProcessor - A Custom Agent for processing emails based on classifications.
+EmailLabeler - A Custom Agent for labeling emails based on classifications.
 
 This agent retrieves classifications from EmailClassifierAgent's agent_states and
 applies appropriate Gmail labels to each email based on the classification category.
@@ -14,6 +14,7 @@ from google.adk.events.event import Event
 from google.genai import types
 from simplegmail.message import Message
 
+from ..config import EmailLabelerConfig
 from ..models.schemas import (
     ClassificationCollectionOutput,
     EmailCategory,
@@ -39,29 +40,24 @@ class EmailLabelerAgent(BaseAgent):
 
     def __init__(
         self,
+        config: EmailLabelerConfig,
         name: str = "EmailLabelerAgent",
         description: str | None = None,
     ):
-        """
-        Initialize the EmailProcessor agent.
-
-        Args:
-            name: The name of the agent (default: "EmailProcessor")
-            description: Optional description of the agent
-        """
         default_description = (
-            "An agent that processes emails based on classifications and applies appropriate Gmail labels."
+            "An agent that labels emails based on classifications and applies appropriate Gmail labels."
         )
         super().__init__(
             name=name,
             description=description or default_description,
         )
+        self._config = config
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
         """
-        Custom execution logic for the EmailProcessor agent.
+        Custom execution logic for the EmailLabeler agent.
 
-        This method retrieves classifications from EmailClassifierAgent's agent_states,
+        This method retrieves accumulated classifications from session state,
         maps them to Message objects from EmailCollectorAgent's agent_states, and
         applies appropriate labels based on the classification.
 
@@ -71,26 +67,17 @@ class EmailLabelerAgent(BaseAgent):
         Yields:
             Events containing processing results
         """
-        # Retrieve classifications from EmailClassifierAgent's agent_states
-        # Try agent_states first, then fall back to session.state
-        classifier_state = ctx.agent_states.get("EmailClassifierAgent")
+        # Classifications are accumulated into session.state by the LoopAgent's
+        # after_agent_callback (accumulate_classifications_callback) after each iteration.
         collection_output: ClassificationCollectionOutput | None = None
-
-        if classifier_state:
-            collection_output = classifier_state.get("collection_output")
-
-        # Fallback: check session.state if not found in agent_states
-        if not collection_output:
-            final_classifications_data = ctx.session.state.get("final_classifications")
-            if final_classifications_data:
-                try:
-                    # model_dump() returns a dict, so we can validate it directly
-                    collection_output = ClassificationCollectionOutput.model_validate(
-                        final_classifications_data
-                    )
-                except Exception:
-                    # If parsing fails, continue to error handling below
-                    pass
+        final_classifications_data = ctx.session.state.get("final_classifications")
+        if final_classifications_data:
+            try:
+                collection_output = ClassificationCollectionOutput.model_validate(
+                    final_classifications_data
+                )
+            except Exception:
+                pass
 
         if not collection_output:
             # No classifications found
@@ -282,5 +269,14 @@ class EmailLabelerAgent(BaseAgent):
         yield event
 
 
-# Create a default instance
-email_labeler_agent = EmailLabelerAgent()
+def create_email_labeler_agent(
+    config: EmailLabelerConfig | None = None,
+    name: str = "EmailLabelerAgent",
+    description: str | None = None,
+) -> EmailLabelerAgent:
+    """Factory function for EmailLabelerAgent."""
+    return EmailLabelerAgent(
+        config=config or EmailLabelerConfig(),
+        name=name,
+        description=description,
+    )
