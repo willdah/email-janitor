@@ -7,6 +7,4 @@ class EmailCollectorConfig(BaseSettings):
     Environment variables use the prefix EMAIL_COLLECTOR_.
     """
 
-    model_config = SettingsConfigDict(
-        env_prefix="EMAIL_COLLECTOR_", case_sensitive=False, extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_prefix="EMAIL_COLLECTOR_", case_sensitive=False, extra="ignore")

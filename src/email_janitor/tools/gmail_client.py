@@ -23,9 +23,7 @@ def get_unread_emails() -> list[Message]:
     """
     gmail: Gmail = get_gmail_client()
     # Use Gmail query syntax to filter: in inbox, not in sent folder, and not already processed
-    unread_emails: list[Message] = gmail.get_unread_messages(
-        query="in:inbox -in:sent -label:EmailJanitor-Processed"
-    )
+    unread_emails: list[Message] = gmail.get_unread_messages(query="in:inbox -in:sent -label:EmailJanitor-Processed")
     return unread_emails
 
 

@@ -17,7 +17,7 @@ from google.adk.models.lite_llm import LiteLlm
 from google.genai import types
 from simplegmail.message import Message
 
-from ..callbacks import cleanup_llm_json_callback
+from ..callbacks.callbacks import cleanup_llm_json_callback
 from ..config import EmailClassifierConfig
 from ..instructions.email_classifier_agent import build_instruction
 from ..schemas.schemas import (
@@ -102,9 +102,7 @@ class EmailClassifierAgent(BaseAgent):
                 invocation_id=ctx.invocation_id,
                 author=self.name,
                 branch=ctx.branch,
-                content=types.Content(
-                    parts=[types.Part(text="Error: EmailCollectorAgent state missing.")]
-                ),
+                content=types.Content(parts=[types.Part(text="Error: EmailCollectorAgent state missing.")]),
             )
             return
 
@@ -147,9 +145,7 @@ class EmailClassifierAgent(BaseAgent):
                 raw_text = event.content.parts[0].text or ""
                 try:
                     match = re.search(r"\{.*\}", raw_text, re.DOTALL)
-                    output = EmailClassificationOutput.model_validate_json(
-                        match.group(0) if match else raw_text
-                    )
+                    output = EmailClassificationOutput.model_validate_json(match.group(0) if match else raw_text)
                 except Exception:
                     output = EmailClassificationOutput(
                         category=EmailCategory.NOISE,

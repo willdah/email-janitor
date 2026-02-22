@@ -1,7 +1,7 @@
 from google.adk.agents.loop_agent import LoopAgent
 from google.adk.agents.sequential_agent import SequentialAgent
 
-from ..callbacks import (
+from ..callbacks.callbacks import (
     accumulate_classifications_callback,
     initialize_loop_state_callback,
 )

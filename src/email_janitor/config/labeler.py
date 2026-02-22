@@ -7,6 +7,4 @@ class EmailLabelerConfig(BaseSettings):
     Environment variables use the prefix EMAIL_LABELER_.
     """
 
-    model_config = SettingsConfigDict(
-        env_prefix="EMAIL_LABELER_", case_sensitive=False, extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_prefix="EMAIL_LABELER_", case_sensitive=False, extra="ignore")

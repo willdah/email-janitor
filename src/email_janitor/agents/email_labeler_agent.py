@@ -73,9 +73,7 @@ class EmailLabelerAgent(BaseAgent):
         final_classifications_data = ctx.session.state.get("final_classifications")
         if final_classifications_data:
             try:
-                collection_output = ClassificationCollectionOutput.model_validate(
-                    final_classifications_data
-                )
+                collection_output = ClassificationCollectionOutput.model_validate(final_classifications_data)
             except Exception:
                 pass
 
@@ -86,11 +84,7 @@ class EmailLabelerAgent(BaseAgent):
                 author=self.name,
                 branch=ctx.branch,
                 content=types.Content(
-                    parts=[
-                        types.Part(
-                            text="No classifications found. EmailClassifierAgent must run first."
-                        )
-                    ]
+                    parts=[types.Part(text="No classifications found. EmailClassifierAgent must run first.")]
                 ),
             )
             yield event
@@ -116,9 +110,7 @@ class EmailLabelerAgent(BaseAgent):
                 invocation_id=ctx.invocation_id,
                 author=self.name,
                 branch=ctx.branch,
-                content=types.Content(
-                    parts=[types.Part(text="No emails found. EmailCollectorAgent must run first.")]
-                ),
+                content=types.Content(parts=[types.Part(text="No emails found. EmailCollectorAgent must run first.")]),
             )
             yield event
             return
@@ -143,9 +135,7 @@ class EmailLabelerAgent(BaseAgent):
             classification_category = classification_result.classification
 
             if not email_id:
-                errors.append(
-                    f"Classification missing email_id: {classification_result.model_dump()}"
-                )
+                errors.append(f"Classification missing email_id: {classification_result.model_dump()}")
                 continue
 
             # Find the corresponding Message object
@@ -261,9 +251,7 @@ class EmailLabelerAgent(BaseAgent):
             invocation_id=ctx.invocation_id,
             author=self.name,
             branch=ctx.branch,
-            content=types.Content(
-                parts=[types.Part(text=summary_output.model_dump_json(indent=2))]
-            ),
+            content=types.Content(parts=[types.Part(text=summary_output.model_dump_json(indent=2))]),
         )
 
         yield event

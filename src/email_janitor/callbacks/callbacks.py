@@ -14,7 +14,7 @@ from google.adk.agents.callback_context import CallbackContext
 from google.adk.models import LlmResponse
 from google.genai import types
 
-from .schemas.schemas import (
+from ..schemas.schemas import (
     ClassificationCollectionOutput,
     EmailCollectionOutput,
 )
@@ -38,9 +38,7 @@ def initialize_loop_state_callback(
     # Retrieve collection output from session state (stored by EmailCollectorAgent)
     collector_output_data = callback_context.state.get("collector_output")
     if not collector_output_data:
-        return types.Content(
-            parts=[types.Part(text="No emails found. EmailCollectorAgent must run first.")]
-        )
+        return types.Content(parts=[types.Part(text="No emails found. EmailCollectorAgent must run first.")])
 
     # Parse the collection output from serialized dict
     try:
@@ -110,9 +108,7 @@ def cleanup_llm_json_callback(
 
         new_parts = [types.Part(text=cleaned_text)]
         # Preserve any non-text parts
-        new_parts.extend(
-            p for p in llm_response.content.parts if not (hasattr(p, "text") and p.text)
-        )
+        new_parts.extend(p for p in llm_response.content.parts if not (hasattr(p, "text") and p.text))
 
         return LlmResponse(
             content=types.Content(parts=new_parts),
@@ -158,8 +154,7 @@ def accumulate_classifications_callback(
         try:
             existing_collection = ClassificationCollectionOutput.model_validate(existing_data)
             existing_classifications = [
-                c.model_dump() if hasattr(c, "model_dump") else c
-                for c in existing_collection.classifications
+                c.model_dump() if hasattr(c, "model_dump") else c for c in existing_collection.classifications
             ]
         except Exception:
             pass

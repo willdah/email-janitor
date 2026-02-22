@@ -50,9 +50,7 @@ class EmailClassificationOutput(BaseModel):
     category: EmailCategory = Field(description="Classification category")
     reasoning: str = Field(description="One-sentence explanation citing specific keywords found")
     confidence: float = Field(default=3.0, ge=1.0, le=5.0, description="Confidence score 1-5")
-    keywords_found: list[str] = Field(
-        default_factory=list, description="Key terms that influenced classification"
-    )
+    keywords_found: list[str] = Field(default_factory=list, description="Key terms that influenced classification")
 
 
 class ClassificationResult(BaseModel):
@@ -71,9 +69,7 @@ class ClassificationCollectionOutput(BaseModel):
     """EmailClassifier's output schema."""
 
     count: int = Field(description="Number of classifications")
-    classifications: list[ClassificationResult] = Field(
-        description="List of classification results"
-    )
+    classifications: list[ClassificationResult] = Field(description="List of classification results")
 
 
 class ProcessingResult(BaseModel):

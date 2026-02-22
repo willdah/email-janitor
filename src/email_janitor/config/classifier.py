@@ -9,9 +9,7 @@ class EmailClassifierConfig(BaseSettings):
     Example: EMAIL_CLASSIFIER_CONFIDENCE_THRESHOLD=4.0
     """
 
-    model_config = SettingsConfigDict(
-        env_prefix="EMAIL_CLASSIFIER_", case_sensitive=False, extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_prefix="EMAIL_CLASSIFIER_", case_sensitive=False, extra="ignore")
 
     confidence_threshold: float = Field(
         default=4.0,

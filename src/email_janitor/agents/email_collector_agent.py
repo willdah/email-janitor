@@ -42,9 +42,7 @@ class EmailCollectorAgent(BaseAgent):
         name: str = "EmailCollectorAgent",
         description: str | None = None,
     ):
-        default_description = (
-            "An agent specialized in fetching and collecting unread emails from your inbox."
-        )
+        default_description = "An agent specialized in fetching and collecting unread emails from your inbox."
         super().__init__(
             name=name,
             description=description or default_description,
@@ -122,12 +120,11 @@ class EmailCollectorAgent(BaseAgent):
             invocation_id=ctx.invocation_id,
             author=self.name,
             branch=ctx.branch,
-            content=types.Content(
-                parts=[types.Part(text=collection_output.model_dump_json(indent=2))]
-            ),
+            content=types.Content(parts=[types.Part(text=collection_output.model_dump_json(indent=2))]),
         )
 
         yield event
+
 
 def create_email_collector_agent(
     config: EmailCollectorConfig | None = None,
