@@ -1,7 +1,10 @@
 from simplegmail import Gmail
 from simplegmail.message import Message
 
+from ..config import GmailConfig
+
 gmail: Gmail | None = None
+_config = GmailConfig()
 
 
 def get_gmail_client():
@@ -22,8 +25,8 @@ def get_unread_emails() -> list[Message]:
     for efficient server-side filtering.
     """
     gmail: Gmail = get_gmail_client()
-    # Use Gmail query syntax to filter: in inbox, not in sent folder, and not already processed
-    unread_emails: list[Message] = gmail.get_unread_messages(query="in:inbox -in:sent -label:EmailJanitor-Processed")
+    query = f'{_config.inbox_query} -label:"{_config.processed_label}"'
+    unread_emails: list[Message] = gmail.get_unread_messages(query=query)
     return unread_emails
 
 
