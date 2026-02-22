@@ -1,7 +1,22 @@
-.PHONY: auth venv
+.PHONY: install run lint format test clean auth
+
+install:
+	uv sync --group dev
+
+run:
+	uv run email-janitor
+
+lint:
+	uv run ruff check .
+
+format:
+	uv run ruff format .
+
+test:
+	uv run pytest
+
+clean:
+	rm -rf .venv __pycache__ .ruff_cache
 
 auth:
-	python gmail_auth.py
-
-venv:
-	uv sync --all-extras
+	uv run python gmail_auth.py

@@ -1,15 +1,8 @@
 import asyncio
-import sys
-import time
-from pathlib import Path
+
 from dotenv import load_dotenv
 from google.adk.runners import InMemoryRunner
 from google.genai import types
-
-# Add project root to path so we can use absolute imports
-project_root = Path(__file__).parent.parent
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
 
 from email_janitor.agent import app
 
@@ -63,5 +56,9 @@ async def main():
             await asyncio.sleep(10)  # Wait before retrying
 
 
-if __name__ == "__main__":
+def run():
     asyncio.run(main())
+
+
+if __name__ == "__main__":
+    run()
