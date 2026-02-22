@@ -21,6 +21,7 @@ from ..callbacks.callbacks import cleanup_llm_json_callback
 from ..config import EmailClassifierConfig
 from ..instructions.email_classifier_agent import build_instruction
 from ..schemas.schemas import (
+    ClassificationCollectionOutput,
     ClassificationResult,
     EmailCategory,
     EmailClassificationInput,
@@ -162,9 +163,28 @@ class EmailClassifierAgent(BaseAgent):
                     refinement_count=0,
                 )
 
-        # Store result in session state for the LoopAgent's after_agent_callback to accumulate
+        # Accumulate result into session state and advance the index.
+        # This must happen inside _run_async_impl because LoopAgent callbacks only
+        # fire once (before/after the entire loop), not once per iteration.
         if classification_result:
-            ctx.session.state["current_classification"] = classification_result.model_dump()
+            existing_data = ctx.session.state.get("final_classifications")
+            existing_classifications = []
+            if existing_data:
+                try:
+                    existing = ClassificationCollectionOutput.model_validate(existing_data)
+                    existing_classifications = [
+                        c.model_dump() if hasattr(c, "model_dump") else c for c in existing.classifications
+                    ]
+                except Exception:
+                    pass
+            all_classifications = existing_classifications + [classification_result.model_dump()]
+            ctx.session.state["final_classifications"] = {
+                "count": len(all_classifications),
+                "classifications": all_classifications,
+            }
+
+        # Always advance the index so the loop terminates even on LLM failure
+        ctx.session.state["current_email_index"] = current_index + 1
 
 
 def create_email_classifier_agent(

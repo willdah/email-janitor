@@ -1,10 +1,7 @@
 from google.adk.agents.loop_agent import LoopAgent
 from google.adk.agents.sequential_agent import SequentialAgent
 
-from ..callbacks.callbacks import (
-    accumulate_classifications_callback,
-    initialize_loop_state_callback,
-)
+from ..callbacks.callbacks import initialize_loop_state_callback
 from ..config import EmailClassifierConfig, EmailCollectorConfig, EmailLabelerConfig
 from .email_classifier_agent import create_email_classifier_agent
 from .email_collector_agent import create_email_collector_agent
@@ -39,7 +36,6 @@ def create_root_agent(
         sub_agents=[email_classifier],
         max_iterations=100,
         before_agent_callback=initialize_loop_state_callback,
-        after_agent_callback=accumulate_classifications_callback,
     )
 
     email_labeler = create_email_labeler_agent(config=labeler_config or EmailLabelerConfig())
