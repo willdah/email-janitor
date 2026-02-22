@@ -127,10 +127,10 @@ The root agent is a **SequentialAgent** pipeline:
 
 ```mermaid
 flowchart LR
-    A[EmailCollectorAgent] --> B[EmailClassifierLoopAgent]
-    B --> C[EmailLabelerAgent]
-    subgraph B[EmailClassifierLoopAgent]
-        D[EmailClassifierAgent] -->|escalate when done| B
+    A[EmailCollectorAgent] --> Loop
+    Loop --> C[EmailLabelerAgent]
+    subgraph Loop[EmailClassifierLoopAgent]
+        D[EmailClassifierAgent] -->|next email| D
     end
 ```
 
