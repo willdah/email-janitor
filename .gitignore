@@ -219,3 +219,7 @@ gmail_token.json
 
 # Cursor
 .cursor
+
+# SQLite
+**/*.sqlite
+**/*.db

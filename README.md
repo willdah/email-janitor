@@ -14,7 +14,8 @@ The app runs in a loop (e.g. every 10 seconds), processing new unread mail each 
 - **LLM classification** — Per-email classification using a configurable LiteLLM-backed model.
 - **Configurable thresholds** — Confidence threshold and model via environment variables.
 - **Nested Gmail labels** — Applies `janitor/*` category labels and archives non-actionable mail.
-- **Docker / Docker Compose** — Run via Compose with mounted Gmail credentials.
+- **Run auditing** — SQLite database records every run and per-email classification for review.
+- **Docker / Docker Compose** — Run via Compose with mounted Gmail credentials and a persistent data volume.
 
 ## Prerequisites
 
@@ -77,6 +78,14 @@ Copy `.env.example` to `.env` and adjust as needed.
 
 Labels are created automatically if they don't exist. The `janitor/*` hierarchy appears as a collapsible `janitor` parent in the Gmail sidebar.
 
+#### Database (`DATABASE_` prefix)
+
+| Variable        | Description                  | Default              |
+| --------------- | ---------------------------- | -------------------- |
+| `DATABASE_PATH` | Path to the SQLite database file | `email_janitor.db` |
+
+In Docker, this is set to `/data/email_janitor.db` and backed by a named volume (see [compose.yml](compose.yml)).
+
 ## Usage
 
 ### Local
@@ -124,6 +133,7 @@ The root agent is a **SequentialAgent** pipeline:
    - `INFORMATIONAL` → `janitor/newsletters`, archived
    - `ACTIONABLE` → left in inbox
    - All emails receive `janitor/done` to prevent reprocessing.
+   - Persists run metadata and per-email classifications to SQLite.
 
 ```mermaid
 flowchart LR
@@ -134,7 +144,25 @@ flowchart LR
     end
 ```
 
-Configuration lives in [`src/email_janitor/config/`](src/email_janitor/config/) as Pydantic Settings classes. Agents are defined in [`src/email_janitor/agents/`](src/email_janitor/agents/) and created via factory functions.
+Configuration lives in [`src/email_janitor/config/`](src/email_janitor/config/) as Pydantic Settings classes. Agents are defined in [`src/email_janitor/agents/`](src/email_janitor/agents/) and created via factory functions. The database layer lives in [`src/email_janitor/database/`](src/email_janitor/database/).
+
+### Database
+
+Each pipeline run is recorded in a local SQLite database (`email_janitor.db` by default) using [aiosqlite](https://github.com/omnilib/aiosqlite) for non-blocking writes. Three tables are created automatically:
+
+| Table             | Purpose                                                    |
+| ----------------- | ---------------------------------------------------------- |
+| `runs`            | One row per pipeline run (timing, counts, status)          |
+| `classifications` | One row per email processed (classification, reasoning, confidence) |
+| `corrections`     | Placeholder for user-submitted corrections (Phase 2)       |
+
+Browse the data with [sqlite-utils](https://sqlite-utils.datasette.io/):
+
+```bash
+sqlite-utils tables email_janitor.db
+sqlite-utils rows email_janitor.db runs
+sqlite-utils rows email_janitor.db classifications --limit 10
+```
 
 ## Development
 
