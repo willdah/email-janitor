@@ -7,6 +7,7 @@ All emails remain unread after processing.
 """
 
 from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
 
 from google.adk.agents.base_agent import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
@@ -15,6 +16,7 @@ from google.genai import types
 from simplegmail.message import Message
 
 from ..config import EmailLabelerConfig, GmailConfig
+from ..database import PersistRunFn
 from ..schemas.schemas import (
     ClassificationCollectionOutput,
     EmailCategory,
@@ -43,6 +45,7 @@ class EmailLabelerAgent(BaseAgent):
         config: EmailLabelerConfig,
         name: str = "EmailLabelerAgent",
         description: str | None = None,
+        persist_run: PersistRunFn | None = None,
     ):
         default_description = (
             "An agent that labels emails based on classifications and applies appropriate Gmail labels."
@@ -53,6 +56,7 @@ class EmailLabelerAgent(BaseAgent):
         )
         self._config = config
         self._gmail_config = GmailConfig()
+        self._persist_run = persist_run
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
         """
@@ -125,6 +129,7 @@ class EmailLabelerAgent(BaseAgent):
 
         # Process each classification
         processing_results = []
+        db_entries: list[dict] = []
         label_counts = {
             gc.noise_label: 0,
             gc.promotional_label: 0,
@@ -153,84 +158,62 @@ class EmailLabelerAgent(BaseAgent):
                     apply_label_to_message(message, gc.noise_label, remove_inbox=True)
                     apply_label_to_message(message, gc.processed_label, remove_inbox=False)
                     label_counts[gc.noise_label] += 1
-                    processing_results.append(
-                        ProcessingResult(
-                            email_id=email_id,
-                            sender=classification_result.sender,
-                            subject=classification_result.subject,
-                            classification=classification_category,
-                            action=f"Applied '{gc.noise_label}' label and removed from inbox",
-                            status="success",
-                        )
-                    )
+                    action = f"Applied '{gc.noise_label}' label and removed from inbox"
+                    status = "success"
                 elif classification_category == EmailCategory.PROMOTIONAL:
                     apply_label_to_message(message, gc.promotional_label, remove_inbox=True)
                     apply_label_to_message(message, gc.processed_label, remove_inbox=False)
                     label_counts[gc.promotional_label] += 1
-                    processing_results.append(
-                        ProcessingResult(
-                            email_id=email_id,
-                            sender=classification_result.sender,
-                            subject=classification_result.subject,
-                            classification=classification_category,
-                            action=f"Applied '{gc.promotional_label}' label and removed from inbox",
-                            status="success",
-                        )
-                    )
+                    action = f"Applied '{gc.promotional_label}' label and removed from inbox"
+                    status = "success"
                 elif classification_category == EmailCategory.INFORMATIONAL:
                     apply_label_to_message(message, gc.informational_label, remove_inbox=True)
                     apply_label_to_message(message, gc.processed_label, remove_inbox=False)
                     label_counts[gc.informational_label] += 1
-                    processing_results.append(
-                        ProcessingResult(
-                            email_id=email_id,
-                            sender=classification_result.sender,
-                            subject=classification_result.subject,
-                            classification=classification_category,
-                            action=f"Applied '{gc.informational_label}' label and removed from inbox",
-                            status="success",
-                        )
-                    )
+                    action = f"Applied '{gc.informational_label}' label and removed from inbox"
+                    status = "success"
                 elif classification_category == EmailCategory.ACTIONABLE:
                     apply_label_to_message(message, gc.processed_label, remove_inbox=False)
                     label_counts[EmailCategory.ACTIONABLE] += 1
-                    processing_results.append(
-                        ProcessingResult(
-                            email_id=email_id,
-                            sender=classification_result.sender,
-                            subject=classification_result.subject,
-                            classification=classification_category,
-                            action="No label applied - left in inbox",
-                            status="success",
-                        )
-                    )
+                    action = "No label applied - left in inbox"
+                    status = "success"
                 else:
                     errors.append(
                         f"Unknown classification category: {classification_category} for email_id: {email_id}"
                     )
-                    processing_results.append(
-                        ProcessingResult(
-                            email_id=email_id,
-                            sender=classification_result.sender,
-                            subject=classification_result.subject,
-                            classification=classification_category,
-                            action="Unknown classification - no action taken",
-                            status="error",
-                        )
-                    )
+                    action = "Unknown classification - no action taken"
+                    status = "error"
             except Exception as e:
                 error_msg = f"Error processing email_id {email_id}: {str(e)}"
                 errors.append(error_msg)
-                processing_results.append(
-                    ProcessingResult(
-                        email_id=email_id,
-                        sender=classification_result.sender,
-                        subject=classification_result.subject,
-                        classification=classification_category,
-                        action=f"Error: {str(e)}",
-                        status="error",
-                    )
+                action = f"Error: {str(e)}"
+                status = "error"
+
+            processing_results.append(
+                ProcessingResult(
+                    email_id=email_id,
+                    sender=classification_result.sender,
+                    subject=classification_result.subject,
+                    classification=classification_category,
+                    action=action,
+                    status=status,
                 )
+            )
+            db_entries.append(
+                {
+                    "email_id": email_id,
+                    "sender": classification_result.sender,
+                    "subject": classification_result.subject,
+                    "classification": classification_category.value
+                    if hasattr(classification_category, "value")
+                    else str(classification_category),
+                    "reasoning": classification_result.reasoning,
+                    "confidence": classification_result.confidence,
+                    "refinement_count": classification_result.refinement_count,
+                    "action": action,
+                    "status": status,
+                }
+            )
 
         # Create structured output summary
         summary_output = ProcessingSummaryOutput(
@@ -239,6 +222,26 @@ class EmailLabelerAgent(BaseAgent):
             errors_count=len(errors),
             errors=errors if errors else None,
         )
+
+        # Persist to database asynchronously
+        if self._persist_run and db_entries:
+            try:
+                run_id: str = ctx.session.state.get("run_id", "unknown")
+                started_at: str = ctx.session.state.get("run_started_at", datetime.now(UTC).isoformat())
+                finished_at: str = datetime.now(UTC).isoformat()
+                await self._persist_run(
+                    run_id=run_id,
+                    started_at=started_at,
+                    finished_at=finished_at,
+                    db_entries=db_entries,
+                    emails_collected=len(email_map),
+                    emails_classified=len(classification_results),
+                    emails_labelled=summary_output.total_processed,
+                    errors_count=summary_output.errors_count,
+                    status="success" if summary_output.errors_count == 0 else "partial",
+                )
+            except Exception as e:
+                print(f"[{self.name}] Failed to persist run to database: {e}")
 
         # Store processing results in agent_states
         ctx.agent_states[self.name] = {
@@ -260,10 +263,12 @@ def create_email_labeler_agent(
     config: EmailLabelerConfig | None = None,
     name: str = "EmailLabelerAgent",
     description: str | None = None,
+    persist_run: PersistRunFn | None = None,
 ) -> EmailLabelerAgent:
     """Factory function for EmailLabelerAgent."""
     return EmailLabelerAgent(
         config=config or EmailLabelerConfig(),
         name=name,
         description=description,
+        persist_run=persist_run,
     )

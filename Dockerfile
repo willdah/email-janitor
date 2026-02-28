@@ -19,7 +19,7 @@ COPY src/ src/
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --no-dev
+    uv sync --frozen --no-dev --no-editable
 
 # --- Stage 2: Final Image ---
 FROM python:3.12-slim-bookworm

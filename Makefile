@@ -1,4 +1,4 @@
-IMAGE ?= email-janitor
+IMAGE ?= willahern/email-janitor
 TAG ?= latest
 
 .PHONY: install run lint format test clean auth docker-build docker-push

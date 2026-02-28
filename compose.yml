@@ -6,7 +6,12 @@ services:
       dockerfile: Dockerfile
     environment:
       - GOOGLE_APPLICATION_CREDENTIALS=/app/client_secret.json
+      - DATABASE_PATH=/data/email_janitor.db
     volumes:
       - ./client_secret.json:/app/client_secret.json
       - ./gmail_token.json:/app/gmail_token.json
+      - data:/data
     command: ["email-janitor"]
+
+volumes:
+  data:
