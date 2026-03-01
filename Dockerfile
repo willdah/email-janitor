@@ -26,8 +26,9 @@ FROM python:3.12-slim-bookworm
 
 WORKDIR /app
 
-# Copy the venv from the builder (includes installed project)
+# Copy the venv and source from the builder
 COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app/src /app/src
 
 # Place the venv at the front of the PATH
 ENV PATH="/app/.venv/bin:$PATH"
