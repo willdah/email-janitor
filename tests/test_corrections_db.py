@@ -6,6 +6,7 @@ from pathlib import Path
 from email_janitor.corrections.db import (
     get_classifications,
     get_correction_stats,
+    get_corrections_for_few_shot,
     get_runs,
     insert_correction,
 )
@@ -142,6 +143,85 @@ class TestInsertCorrection:
         count = conn.execute("SELECT COUNT(*) FROM corrections WHERE classification_id = 1").fetchone()[0]
         conn.close()
         assert count == 3
+
+
+# ---------------------------------------------------------------------------
+# get_correction_stats
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# get_corrections_for_few_shot
+# ---------------------------------------------------------------------------
+
+
+class TestGetCorrectionsForFewShot:
+    def test_empty_database(self, tmp_db: Path):
+        rows = get_corrections_for_few_shot(tmp_db)
+        assert rows == []
+
+    def test_returns_corrections_with_sender_subject(self, seeded_db: Path):
+        insert_correction(
+            seeded_db,
+            classification_id=1,
+            run_id="run-1",
+            email_id="msg_001",
+            original_classification="INFORMATIONAL",
+            corrected_classification="ACTIONABLE",
+            notes="Actually needs a response",
+        )
+        rows = get_corrections_for_few_shot(seeded_db)
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["sender"] == "alice@example.com"
+        assert row["subject"] == "Newsletter"
+        assert row["original_classification"] == "INFORMATIONAL"
+        assert row["corrected_classification"] == "ACTIONABLE"
+        assert row["notes"] == "Actually needs a response"
+        assert row["corrected_at"] is not None
+
+    def test_ordered_by_corrected_at_desc(self, seeded_db: Path):
+        # Insert two corrections — first for classification 1, then for 2
+        insert_correction(
+            seeded_db,
+            classification_id=1,
+            run_id="run-1",
+            email_id="msg_001",
+            original_classification="INFORMATIONAL",
+            corrected_classification="ACTIONABLE",
+        )
+        insert_correction(
+            seeded_db,
+            classification_id=2,
+            run_id="run-1",
+            email_id="msg_002",
+            original_classification="NOISE",
+            corrected_classification="PROMOTIONAL",
+        )
+        rows = get_corrections_for_few_shot(seeded_db)
+        assert len(rows) == 2
+        # Most recent correction first
+        assert rows[0]["corrected_classification"] == "PROMOTIONAL"
+
+    def test_respects_limit(self, seeded_db: Path):
+        insert_correction(
+            seeded_db,
+            classification_id=1,
+            run_id="run-1",
+            email_id="msg_001",
+            original_classification="INFORMATIONAL",
+            corrected_classification="ACTIONABLE",
+        )
+        insert_correction(
+            seeded_db,
+            classification_id=2,
+            run_id="run-1",
+            email_id="msg_002",
+            original_classification="NOISE",
+            corrected_classification="PROMOTIONAL",
+        )
+        rows = get_corrections_for_few_shot(seeded_db, limit=1)
+        assert len(rows) == 1
 
 
 # ---------------------------------------------------------------------------

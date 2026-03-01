@@ -19,6 +19,7 @@ from simplegmail.message import Message
 
 from ..callbacks.callbacks import cleanup_llm_json_callback
 from ..config import EmailClassifierConfig
+from ..corrections.relevance import select_relevant_corrections
 from ..instructions.email_classifier_agent import build_instruction
 from ..schemas.schemas import (
     ClassificationCollectionOutput,
@@ -84,13 +85,18 @@ class EmailClassifierAgent(BaseAgent):
         email_data = collection_output.emails[current_index]
         email_body = ctx.state.get("current_email_body")
 
+        # Select relevant corrections for this specific email
+        all_corrections = ctx.state.get("few_shot_corrections", [])
+        relevant_corrections = select_relevant_corrections(all_corrections, email_data.sender)
+
         return build_instruction(
             EmailClassificationInput(
                 sender=email_data.sender,
                 subject=email_data.subject,
                 snippet=email_data.snippet[:500] if email_data.snippet else None,
                 body=email_body[:2000] if email_body else None,
-            )
+            ),
+            corrections=relevant_corrections,
         )
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:

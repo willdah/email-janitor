@@ -113,6 +113,34 @@ def insert_correction(
         conn.close()
 
 
+def get_corrections_for_few_shot(db_path: Path, *, limit: int = 50) -> list[dict]:
+    """Return recent corrections with sender/subject for few-shot prompt injection.
+
+    Each row contains sender and subject from the original classification,
+    plus the correction details. Results are ordered by corrected_at DESC
+    and capped at ``limit`` rows.
+    """
+    query = """
+        SELECT
+            c.sender,
+            c.subject,
+            cr.original_classification,
+            cr.corrected_classification,
+            cr.notes,
+            cr.corrected_at
+        FROM corrections cr
+        JOIN classifications c ON c.id = cr.classification_id
+        ORDER BY cr.corrected_at DESC
+        LIMIT ?
+    """
+    conn = _connect(db_path)
+    try:
+        rows = conn.execute(query, (limit,)).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
 def get_correction_stats(db_path: Path) -> dict:
     """Return summary stats for the corrections table."""
     conn = _connect(db_path)

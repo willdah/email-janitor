@@ -9,6 +9,7 @@ from google.genai import types
 
 from email_janitor.agents.root_agent import create_root_agent
 from email_janitor.config import AppConfig, DatabaseConfig
+from email_janitor.corrections.db import get_corrections_for_few_shot
 from email_janitor.database import DatabaseService
 
 # Load environment variables before instantiating settings
@@ -34,11 +35,20 @@ async def main():
                 run_id = str(uuid.uuid4())
                 started_at = datetime.now(UTC).isoformat()
 
+                # Load recent corrections for few-shot prompt injection
+                few_shot_corrections = []
+                if db_config.path.exists():
+                    few_shot_corrections = get_corrections_for_few_shot(db_config.path)
+
                 # Create a new session per iteration with run metadata
                 session = await runner.session_service.create_session(
                     app_name=config.app_name,
                     user_id=config.user_id,
-                    state={"run_id": run_id, "run_started_at": started_at},
+                    state={
+                        "run_id": run_id,
+                        "run_started_at": started_at,
+                        "few_shot_corrections": few_shot_corrections,
+                    },
                 )
 
                 # Run the full agent pipeline
