@@ -75,6 +75,8 @@ class DatabaseService:
         """Open and return the database connection, creating schema on first call."""
         if self._conn is None:
             self._conn = await aiosqlite.connect(self._db_path)
+            await self._conn.execute("PRAGMA journal_mode=WAL")
+            await self._conn.execute("PRAGMA busy_timeout=5000")
             await self._ensure_schema()
         return self._conn
 

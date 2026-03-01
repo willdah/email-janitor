@@ -1,13 +1,16 @@
 IMAGE ?= willahern/email-janitor
 TAG ?= latest
 
-.PHONY: install run lint format test clean auth docker-build docker-push
+.PHONY: install run corrections lint format test clean auth docker-build docker-push
 
 install:
 	uv sync --group dev
 
 run:
 	uv run email-janitor
+
+corrections:
+	uv run streamlit run src/email_janitor/corrections/app.py
 
 lint:
 	uv run ruff check .

@@ -1,9 +1,7 @@
 services:
   email-janitor:
     platform: linux/amd64
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: willahern/email-janitor:latest
     environment:
       - GOOGLE_APPLICATION_CREDENTIALS=/app/client_secret.json
       - DATABASE_PATH=/data/email_janitor.db
@@ -12,6 +10,17 @@ services:
       - ./gmail_token.json:/app/gmail_token.json
       - data:/data
     command: ["email-janitor"]
+
+  corrections:
+    platform: linux/amd64
+    image: willahern/email-janitor:latest
+    environment:
+      - DATABASE_PATH=/data/email_janitor.db
+    volumes:
+      - data:/data
+    ports:
+      - "8501:8501"
+    command: ["streamlit", "run", "src/email_janitor/corrections/app.py", "--server.address=0.0.0.0"]
 
 volumes:
   data:
