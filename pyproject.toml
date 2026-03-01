@@ -27,6 +27,7 @@ email-janitor = "email_janitor.main:run"
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
+    "pytest-asyncio>=1.0.0",
     "ruff>=0.14.14",
 ]
 
@@ -35,6 +36,7 @@ packages = ["src/email_janitor"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 120
