@@ -35,7 +35,8 @@ class EmailLabelerAgent(BaseAgent):
     - NOISE -> "Noise" label (removes from inbox)
     - PROMOTIONAL -> "Promotions" label (removes from inbox)
     - INFORMATIONAL -> "Newsletters" label (removes from inbox)
-    - ACTIONABLE -> No action (leave in inbox)
+    - URGENT -> "Urgent" label (stays in inbox)
+    - PERSONAL -> "Personal" label (stays in inbox)
 
     All emails remain unread after processing.
     """
@@ -134,7 +135,8 @@ class EmailLabelerAgent(BaseAgent):
             gc.noise_label: 0,
             gc.promotional_label: 0,
             gc.informational_label: 0,
-            EmailCategory.ACTIONABLE: 0,  # No label applied; left in inbox
+            gc.urgent_label: 0,
+            gc.personal_label: 0,
         }
         errors = []
 
@@ -172,10 +174,17 @@ class EmailLabelerAgent(BaseAgent):
                     label_counts[gc.informational_label] += 1
                     action = f"Applied '{gc.informational_label}' label and removed from inbox"
                     status = "success"
-                elif classification_category == EmailCategory.ACTIONABLE:
+                elif classification_category == EmailCategory.URGENT:
+                    apply_label_to_message(message, gc.urgent_label, remove_inbox=False)
                     apply_label_to_message(message, gc.processed_label, remove_inbox=False)
-                    label_counts[EmailCategory.ACTIONABLE] += 1
-                    action = "No label applied - left in inbox"
+                    label_counts[gc.urgent_label] += 1
+                    action = f"Applied '{gc.urgent_label}' label and kept in inbox"
+                    status = "success"
+                elif classification_category == EmailCategory.PERSONAL:
+                    apply_label_to_message(message, gc.personal_label, remove_inbox=False)
+                    apply_label_to_message(message, gc.processed_label, remove_inbox=False)
+                    label_counts[gc.personal_label] += 1
+                    action = f"Applied '{gc.personal_label}' label and kept in inbox"
                     status = "success"
                 else:
                     errors.append(

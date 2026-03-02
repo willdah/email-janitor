@@ -15,6 +15,14 @@ class GmailConfig(BaseSettings):
         default="janitor/done",
         description="Gmail label applied to every email after processing to prevent reprocessing",
     )
+    urgent_label: str = Field(
+        default="janitor/urgent",
+        description="Gmail label applied to emails classified as URGENT (kept in inbox)",
+    )
+    personal_label: str = Field(
+        default="janitor/personal",
+        description="Gmail label applied to emails classified as PERSONAL (kept in inbox)",
+    )
     noise_label: str = Field(
         default="janitor/noise",
         description="Gmail label applied to emails classified as NOISE",

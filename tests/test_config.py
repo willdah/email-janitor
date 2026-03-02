@@ -50,6 +50,8 @@ class TestGmailConfig:
     def test_defaults(self):
         cfg = GmailConfig()
         assert cfg.processed_label == "janitor/done"
+        assert cfg.urgent_label == "janitor/urgent"
+        assert cfg.personal_label == "janitor/personal"
         assert cfg.noise_label == "janitor/noise"
         assert cfg.promotional_label == "janitor/promotions"
         assert cfg.informational_label == "janitor/newsletters"

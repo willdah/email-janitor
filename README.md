@@ -4,7 +4,7 @@ Agentic solution that cleans up your email inbox.
 
 ## Description
 
-Email Janitor is an agentic pipeline that collects unread emails from your Gmail inbox, classifies each message (ACTIONABLE, INFORMATIONAL, PROMOTIONAL, or NOISE) using an LLM classifier, then applies Gmail labels and archives messages accordingly. Processed messages are tagged with `janitor/done` so they are skipped on subsequent runs.
+Email Janitor is an agentic pipeline that collects unread emails from your Gmail inbox, classifies each message (URGENT, PERSONAL, INFORMATIONAL, PROMOTIONAL, or NOISE) using an LLM classifier, then applies Gmail labels and archives messages accordingly. Processed messages are tagged with `janitor/done` so they are skipped on subsequent runs.
 
 The app runs in a loop (e.g. every 10 seconds), processing new unread mail each cycle. It uses [Google ADK](https://github.com/google/adk) with [LiteLLM](https://docs.litellm.ai/) (Ollama by default) for local, privacy-preserving classification.
 
@@ -71,6 +71,8 @@ Copy `.env.example` to `.env` and adjust as needed.
 | Variable                    | Description                                    | Default                |
 | --------------------------- | ---------------------------------------------- | ---------------------- |
 | `GMAIL_PROCESSED_LABEL`     | Label applied to every processed email         | `janitor/done`         |
+| `GMAIL_URGENT_LABEL`        | Label applied to URGENT emails (kept in inbox) | `janitor/urgent`       |
+| `GMAIL_PERSONAL_LABEL`      | Label applied to PERSONAL emails (kept in inbox)| `janitor/personal`    |
 | `GMAIL_NOISE_LABEL`         | Label applied to NOISE emails                  | `janitor/noise`        |
 | `GMAIL_PROMOTIONAL_LABEL`   | Label applied to PROMOTIONAL emails            | `janitor/promotions`   |
 | `GMAIL_INFORMATIONAL_LABEL` | Label applied to INFORMATIONAL emails          | `janitor/newsletters`  |
@@ -128,10 +130,11 @@ The root agent is a **SequentialAgent** pipeline:
    - Delegates to a pre-built `LlmAgent` sub-agent with a dynamic per-email prompt.
    - Accumulates results into session state.
 3. **EmailLabelerAgent** — Reads all accumulated classifications and applies Gmail labels:
-   - `NOISE` → `janitor/noise`, archived
-   - `PROMOTIONAL` → `janitor/promotions`, archived
+   - `URGENT` → `janitor/urgent`, kept in inbox
+   - `PERSONAL` → `janitor/personal`, kept in inbox
    - `INFORMATIONAL` → `janitor/newsletters`, archived
-   - `ACTIONABLE` → left in inbox
+   - `PROMOTIONAL` → `janitor/promotions`, archived
+   - `NOISE` → `janitor/noise`, archived
    - All emails receive `janitor/done` to prevent reprocessing.
    - Persists run metadata and per-email classifications to SQLite.
 
@@ -154,7 +157,7 @@ Each pipeline run is recorded in a local SQLite database (`email_janitor.db` by 
 | ----------------- | ---------------------------------------------------------- |
 | `runs`            | One row per pipeline run (timing, counts, status)          |
 | `classifications` | One row per email processed (classification, reasoning, confidence) |
-| `corrections`     | Placeholder for user-submitted corrections (Phase 2)       |
+| `corrections`     | User-submitted corrections used as few-shot examples       |
 
 Browse the data with [sqlite-utils](https://sqlite-utils.datasette.io/):
 

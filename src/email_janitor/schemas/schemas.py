@@ -9,7 +9,8 @@ from pydantic import BaseModel, Field
 class EmailCategory(str, Enum):
     """Email classification categories."""
 
-    ACTIONABLE = "ACTIONABLE"
+    URGENT = "URGENT"
+    PERSONAL = "PERSONAL"
     INFORMATIONAL = "INFORMATIONAL"
     PROMOTIONAL = "PROMOTIONAL"
     NOISE = "NOISE"
