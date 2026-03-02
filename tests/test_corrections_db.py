@@ -79,7 +79,7 @@ class TestGetClassifications:
             run_id="run-1",
             email_id="msg_001",
             original_classification="INFORMATIONAL",
-            corrected_classification="ACTIONABLE",
+            corrected_classification="PERSONAL",
         )
 
         rows = get_classifications(seeded_db, hide_corrected=True)
@@ -93,13 +93,13 @@ class TestGetClassifications:
             run_id="run-1",
             email_id="msg_001",
             original_classification="INFORMATIONAL",
-            corrected_classification="ACTIONABLE",
+            corrected_classification="PERSONAL",
             notes="Misclassified",
         )
         rows = get_classifications(seeded_db)
         corrected = [r for r in rows if r["corrected_classification"] is not None]
         assert len(corrected) == 1
-        assert corrected[0]["corrected_classification"] == "ACTIONABLE"
+        assert corrected[0]["corrected_classification"] == "PERSONAL"
         assert corrected[0]["correction_notes"] == "Misclassified"
 
     def test_combined_filters(self, seeded_db: Path):
@@ -120,7 +120,7 @@ class TestInsertCorrection:
             run_id="run-1",
             email_id="msg_001",
             original_classification="INFORMATIONAL",
-            corrected_classification="ACTIONABLE",
+            corrected_classification="PERSONAL",
         )
         conn = sqlite3.connect(str(seeded_db))
         conn.row_factory = sqlite3.Row
@@ -167,7 +167,7 @@ class TestGetCorrectionsForFewShot:
             run_id="run-1",
             email_id="msg_001",
             original_classification="INFORMATIONAL",
-            corrected_classification="ACTIONABLE",
+            corrected_classification="PERSONAL",
             notes="Actually needs a response",
         )
         rows = get_corrections_for_few_shot(seeded_db)
@@ -176,7 +176,7 @@ class TestGetCorrectionsForFewShot:
         assert row["sender"] == "alice@example.com"
         assert row["subject"] == "Newsletter"
         assert row["original_classification"] == "INFORMATIONAL"
-        assert row["corrected_classification"] == "ACTIONABLE"
+        assert row["corrected_classification"] == "PERSONAL"
         assert row["notes"] == "Actually needs a response"
         assert row["corrected_at"] is not None
 
@@ -188,7 +188,7 @@ class TestGetCorrectionsForFewShot:
             run_id="run-1",
             email_id="msg_001",
             original_classification="INFORMATIONAL",
-            corrected_classification="ACTIONABLE",
+            corrected_classification="PERSONAL",
         )
         insert_correction(
             seeded_db,
@@ -210,7 +210,7 @@ class TestGetCorrectionsForFewShot:
             run_id="run-1",
             email_id="msg_001",
             original_classification="INFORMATIONAL",
-            corrected_classification="ACTIONABLE",
+            corrected_classification="PERSONAL",
         )
         insert_correction(
             seeded_db,
@@ -242,7 +242,7 @@ class TestGetCorrectionStats:
             run_id="run-1",
             email_id="msg_001",
             original_classification="INFORMATIONAL",
-            corrected_classification="ACTIONABLE",
+            corrected_classification="PERSONAL",
         )
         insert_correction(
             seeded_db,
@@ -250,8 +250,8 @@ class TestGetCorrectionStats:
             run_id="run-1",
             email_id="msg_002",
             original_classification="NOISE",
-            corrected_classification="ACTIONABLE",
+            corrected_classification="PERSONAL",
         )
         stats = get_correction_stats(seeded_db)
         assert stats["total"] == 2
-        assert stats["by_category"]["ACTIONABLE"] == 2
+        assert stats["by_category"]["PERSONAL"] == 2

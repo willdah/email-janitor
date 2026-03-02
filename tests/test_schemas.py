@@ -22,7 +22,8 @@ from email_janitor.schemas.schemas import (
 class TestEmailCategory:
     def test_members(self):
         assert set(EmailCategory) == {
-            EmailCategory.ACTIONABLE,
+            EmailCategory.URGENT,
+            EmailCategory.PERSONAL,
             EmailCategory.INFORMATIONAL,
             EmailCategory.PROMOTIONAL,
             EmailCategory.NOISE,

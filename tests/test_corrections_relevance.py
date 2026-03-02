@@ -3,7 +3,7 @@
 from email_janitor.corrections.relevance import _extract_domain, select_relevant_corrections
 
 
-def _correction(sender: str, corrected: str = "ACTIONABLE", **overrides) -> dict:
+def _correction(sender: str, corrected: str = "PERSONAL", **overrides) -> dict:
     """Helper to build a correction dict."""
     base = {
         "sender": sender,
@@ -82,11 +82,11 @@ class TestSelectRelevantCorrections:
     def test_preserves_order_within_tiers(self):
         corrections = [
             _correction("alice@example.com", corrected="INFORMATIONAL"),
-            _correction("alice@example.com", corrected="ACTIONABLE"),
+            _correction("alice@example.com", corrected="PERSONAL"),
         ]
         result = select_relevant_corrections(corrections, "alice@example.com")
         assert result[0]["corrected_classification"] == "INFORMATIONAL"
-        assert result[1]["corrected_classification"] == "ACTIONABLE"
+        assert result[1]["corrected_classification"] == "PERSONAL"
 
 
 # ---------------------------------------------------------------------------

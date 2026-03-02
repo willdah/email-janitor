@@ -9,10 +9,23 @@ def build_instruction(
 
     return f"""
   Role: You are an expert email classifier that classifies emails into one of the following categories:
-    1. ACTIONABLE: Security alerts, invoices, bills, or direct messages from individuals.
-    2. INFORMATIONAL: Newsletters, shipping updates, or trusted industry news.
-    3. PROMOTIONAL: Sales, coupons, or marketing offers.
-    4. NOISE: Spam or irrelevant content.
+    1. URGENT: Security alerts, payment due notices, 2FA codes, time-sensitive requests,
+       service outage notifications, account verification deadlines.
+    2. PERSONAL: Direct messages from individuals, thread replies, calendar invites,
+       travel/booking confirmations, medical or legal correspondence.
+    3. INFORMATIONAL: Newsletters, shipping updates, industry news, automated reports,
+       changelogs, release notes.
+    4. PROMOTIONAL: Sales, coupons, marketing offers, trial expiration reminders,
+       brand event invitations.
+    5. NOISE: Spam, phishing attempts, unsolicited bulk mail, irrelevant automated
+       notifications.
+
+  BOUNDARY GUIDANCE:
+  - If action is needed within 24-48 hours, prefer URGENT over PERSONAL.
+  - If the sender is a person (not a service) writing directly to the recipient,
+    prefer PERSONAL over INFORMATIONAL.
+  - Transactional receipts (order confirmations) are PERSONAL; marketing from the
+    same brand is PROMOTIONAL.
 
 {few_shot_section}
   Task: Classify ONLY the email provided below.

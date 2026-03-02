@@ -18,7 +18,7 @@ def _sample_corrections():
             "sender": "billing@company.com",
             "subject": "Invoice #1234",
             "original_classification": "PROMOTIONAL",
-            "corrected_classification": "ACTIONABLE",
+            "corrected_classification": "URGENT",
             "notes": "",
             "corrected_at": "2026-01-14T10:00:00",
         },
@@ -29,7 +29,7 @@ class TestBuildInstruction:
     def test_contains_categories(self):
         inp = EmailClassificationInput(sender="a@b.com", subject="Hi")
         text = build_instruction(inp)
-        for cat in ("ACTIONABLE", "INFORMATIONAL", "PROMOTIONAL", "NOISE"):
+        for cat in ("URGENT", "PERSONAL", "INFORMATIONAL", "PROMOTIONAL", "NOISE"):
             assert cat in text
 
     def test_contains_email_data(self):
@@ -92,7 +92,7 @@ class TestBuildInstructionWithCorrections:
                 "sender": "x@y.com",
                 "subject": "Test",
                 "original_classification": "NOISE",
-                "corrected_classification": "ACTIONABLE",
+                "corrected_classification": "PERSONAL",
                 "notes": "",
             }
         ]
