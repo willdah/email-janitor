@@ -42,34 +42,34 @@ it unless you point the model at a hosted provider.
 
 Most inbox-zero tools either require a cloud LLM (your email bodies go to OpenAI, Anthropic, etc.)
 or rely on rigid keyword rules that need constant tuning. Email Janitor runs a small local model via
-Ollama — so the content of your emails stays on your machine — and learns from your corrections: fix
+Ollama, keeping email content on your machine, and learns from your corrections: fix
 a misclassification once in the Streamlit UI and the change feeds back into the prompt as a few-shot
 example on the next run.
 
 ## Features
 
-- **Fully local by default** — Ollama + `llama3.1:8b`; no email content leaves your machine.
-- **5-category classification** — URGENT, PERSONAL, INFORMATIONAL, PROMOTIONAL, NOISE with
+- **Fully local by default**: Ollama + `llama3.1:8b`; no email content leaves your machine.
+- **5-category classification**: URGENT, PERSONAL, INFORMATIONAL, PROMOTIONAL, NOISE with
   configurable confidence thresholds.
-- **Human-in-the-loop corrections** — Streamlit UI for reviewing and correcting classifications;
+- **Human-in-the-loop corrections**: Streamlit UI for reviewing and correcting classifications;
   corrections become few-shot examples automatically.
-- **Prompt-injection defenses** — email bodies wrapped in `<untrusted_email>` tags; HTML stripped
+- **Prompt-injection defenses**: email bodies wrapped in `<untrusted_email>` tags; HTML stripped
   before reaching the model.
-- **Low-confidence review routing** — uncertain classifications go to `janitor/review` and stay in
+- **Low-confidence review routing**: uncertain classifications go to `janitor/review` and stay in
   the inbox for triage instead of being silently archived.
-- **Offline eval harness** — precision/recall/F1 per category, confusion matrix, and confidence
+- **Offline eval harness**: precision/recall/F1 per category, confusion matrix, and confidence
   calibration against a golden JSONL dataset.
-- **Structured observability** — JSON logs with `jq`-friendly fields and optional OpenTelemetry
+- **Structured observability**: JSON logs with `jq`-friendly fields and optional OpenTelemetry
   tracing.
-- **Resilience** — exponential backoff on Gmail 429/5xx errors; LLM timeouts and retries; poll-loop
+- **Resilience**: exponential backoff on Gmail 429/5xx errors; LLM timeouts and retries; poll-loop
   backoff on repeated failures.
-- **Docker Compose** — one command to run the pipeline and corrections UI against a persistent
+- **Docker Compose**: one command to run the pipeline and corrections UI against a persistent
   volume.
 
 ## Quickstart
 
 You need:
-- Gmail OAuth credentials (`client_secret.json` + `gmail_token.json`) — see [Gmail credentials](#gmail-credentials)
+- Gmail OAuth credentials (`client_secret.json` + `gmail_token.json`); see [Gmail credentials](#gmail-credentials)
 - Ollama running with `llama3.1:8b` pulled, or another [LiteLLM-compatible provider](https://docs.litellm.ai/docs/providers)
 
 ### Docker (recommended)
@@ -108,7 +108,7 @@ make run       # starts the polling loop
 
 ## Configuration
 
-All settings are optional — defaults work out-of-the-box with a local Ollama instance.
+All settings are optional; defaults work out-of-the-box with a local Ollama instance.
 
 ### Gmail credentials
 
@@ -211,14 +211,14 @@ make docker-push IMAGE=ghcr.io/you/email-janitor TAG=1.0.0
 
 The root agent is a **SequentialAgent** pipeline:
 
-1. **EmailCollectorAgent** — Fetches unread emails from Gmail (inbox, excluding sent and already
-   processed). Stores results in session state and agent state.
-2. **EmailClassifierLoopAgent** — A `LoopAgent` that classifies emails one-by-one. On each
+1. **EmailCollectorAgent**: fetches unread emails from Gmail (inbox, excluding sent and already
+   processed) and stores results in session state.
+2. **EmailClassifierLoopAgent**: a `LoopAgent` that classifies emails one-by-one. On each
    iteration, `EmailClassifierAgent`:
    - Checks whether all emails have been classified; escalates to end the loop if so.
    - Delegates to a pre-built `LlmAgent` sub-agent with a dynamic per-email prompt.
    - Accumulates results into session state.
-3. **EmailLabelerAgent** — Reads all accumulated classifications and applies Gmail labels:
+3. **EmailLabelerAgent**: reads all accumulated classifications and applies Gmail labels:
    - `URGENT` → `janitor/urgent`, kept in inbox
    - `PERSONAL` → `janitor/personal`, kept in inbox
    - `INFORMATIONAL` → `janitor/newsletters`, archived
@@ -350,7 +350,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for a full guide including the classifier
 - **Everything in `janitor/review`:** `EMAIL_CLASSIFIER_CONFIDENCE_THRESHOLD` is too high for your
   model; lower it, or iterate on the prompt with the eval harness.
 - **Transient 429 / connection errors:** Gmail calls auto-retry three times with exponential
-  backoff. Repeated failures back off the outer poll loop — watch `consecutive_failures` in the
+  backoff. Repeated failures back off the outer poll loop; watch `consecutive_failures` in the
   logs.
 - **Debugging a misclassification:** Grep the JSON logs for the email's `email_id`, or set
   `OTEL_EXPORT=console` to see the full span tree including the LLM request/response.

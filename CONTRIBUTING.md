@@ -6,7 +6,7 @@ development environment, run tests, and submit changes.
 ## Prerequisites
 
 - **Python** ≥ 3.12
-- **uv** — [install here](https://docs.astral.sh/uv/)
+- **uv**: [install here](https://docs.astral.sh/uv/)
 - **Ollama** (optional, required only to run the classifier or eval harness)
 
 ## Local setup
@@ -184,7 +184,7 @@ are present.
 `ollama pull llama3.1:8b`. If it's consistently slow, raise
 `EMAIL_CLASSIFIER_LLM_TIMEOUT_SECONDS`.
 
-**Eval harness fails.** Same as above — Ollama must be running. For quick checks,
+**Eval harness fails.** Same as above; Ollama must be running. For quick checks,
 use `--limit 5` to test only five cases.
 
 ## Questions?
