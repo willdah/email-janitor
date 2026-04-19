@@ -1,0 +1,75 @@
+name: Bug report
+description: Something isn't working as expected.
+labels: ["bug"]
+body:
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before you submit
+      options:
+        - label: I searched existing issues and didn't find a duplicate.
+          required: true
+        - label: I'm running the latest commit on `main`.
+          required: true
+
+  - type: dropdown
+    id: version
+    attributes:
+      label: Version
+      description: Which version are you running? (`uv pip show email-janitor` or `git rev-parse --short HEAD`)
+      options:
+        - "0.1.0"
+        - "dev / main (not a release)"
+    validations:
+      required: true
+
+  - type: input
+    id: python_version
+    attributes:
+      label: Python version
+      placeholder: "3.12.3"
+    validations:
+      required: true
+
+  - type: input
+    id: ollama_model
+    attributes:
+      label: Ollama model (or LLM provider)
+      description: Value of `EMAIL_CLASSIFIER_MODEL`
+      placeholder: "ollama_chat/llama3.1:8b"
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Set `EMAIL_CLASSIFIER_CONFIDENCE_THRESHOLD=...`
+        2. Run `make run`
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: >
+        Paste the JSON log line(s) for the affected email if available.
+        `uv run email-janitor 2>&1 | jq 'select(.email_id == "...")'`
+      render: json
