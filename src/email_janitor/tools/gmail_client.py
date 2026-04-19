@@ -2,6 +2,7 @@ from simplegmail import Gmail
 from simplegmail.message import Message
 
 from ..config import GmailConfig
+from ..utils.retry import gmail_retry
 
 gmail: Gmail | None = None
 _config = GmailConfig()
@@ -18,11 +19,14 @@ def get_gmail_client():
     return gmail
 
 
+@gmail_retry
 def get_unread_emails() -> list[Message]:
     """
     Uses the Gmail client to get a list of unread emails from the inbox only.
     Filters out sent messages and already processed emails using Gmail's query syntax
     for efficient server-side filtering.
+
+    Retries on transient errors (429 rate limits, 5xx, connection failures).
     """
     gmail: Gmail = get_gmail_client()
     query = f'{_config.inbox_query} -label:"{_config.processed_label}"'
@@ -61,10 +65,13 @@ def get_label_id_by_name(label_name: str) -> str:
     return created_label["id"]
 
 
+@gmail_retry
 def apply_label_to_message(message: Message, label_name: str, remove_inbox: bool = False) -> None:
     """
     Applies a label to a Gmail message by name. The label will be created if it doesn't exist.
     This operation does not mark the email as read.
+
+    Retries on transient errors (429 rate limits, 5xx, connection failures).
 
     Args:
         message: The Message object to apply the label to

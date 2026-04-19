@@ -35,6 +35,13 @@ class GmailConfig(BaseSettings):
         default="janitor/newsletters",
         description="Gmail label applied to emails classified as INFORMATIONAL",
     )
+    review_label: str = Field(
+        default="janitor/review",
+        description=(
+            "Gmail label applied to low-confidence classifications. Low-confidence emails stay "
+            "in the inbox with this label so they can be reviewed in the corrections UI."
+        ),
+    )
     inbox_query: str = Field(
         default="in:inbox -in:sent",
         description="Base Gmail search query for fetching emails (processed_label exclusion is appended automatically)",

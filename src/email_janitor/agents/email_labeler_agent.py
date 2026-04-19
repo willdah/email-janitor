@@ -3,10 +3,13 @@ EmailLabeler - A Custom Agent for labeling emails based on classifications.
 
 This agent retrieves classifications from EmailClassifierAgent's agent_states and
 applies appropriate Gmail labels to each email based on the classification category.
-All emails remain unread after processing.
+Low-confidence classifications are routed to the review label (kept in inbox) so
+they can be reviewed before trusting the pipeline's decision. All emails remain
+unread after processing.
 """
 
 from collections.abc import AsyncGenerator
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from google.adk.agents.base_agent import BaseAgent
@@ -15,8 +18,9 @@ from google.adk.events.event import Event
 from google.genai import types
 from simplegmail.message import Message
 
-from ..config import EmailLabelerConfig, GmailConfig
+from ..config import EmailClassifierConfig, EmailLabelerConfig, GmailConfig
 from ..database import PersistRunFn
+from ..observability import get_logger
 from ..schemas.schemas import (
     ClassificationCollectionOutput,
     EmailCategory,
@@ -25,20 +29,96 @@ from ..schemas.schemas import (
 )
 from ..tools.gmail_client import apply_label_to_message
 
+_logger = get_logger(__name__)
+
+
+@dataclass
+class LabelDecision:
+    """Outcome of the classification → Gmail-label mapping.
+
+    ``status`` is either ``"success"`` (pipeline trusted the classification) or
+    ``"needs_review"`` (confidence fell below the threshold, so the category
+    label was skipped and the email was left in the inbox under the review label).
+    """
+
+    label: str
+    remove_inbox: bool
+    action: str
+    status: str
+
+
+def select_label_decision(
+    category: EmailCategory,
+    confidence: float,
+    *,
+    gmail_config: GmailConfig,
+    confidence_threshold: float | None,
+) -> LabelDecision:
+    """Pure mapping from (category, confidence) to the Gmail label to apply.
+
+    When ``confidence_threshold`` is set and the classification's confidence is
+    below it, the email is routed to the review label and kept in the inbox,
+    regardless of the predicted category. This prevents low-confidence
+    classifications from silently archiving emails.
+    """
+    if confidence_threshold is not None and confidence < confidence_threshold:
+        return LabelDecision(
+            label=gmail_config.review_label,
+            remove_inbox=False,
+            action=(
+                f"Confidence {confidence:.1f} < threshold {confidence_threshold:.1f}; "
+                f"applied '{gmail_config.review_label}' and kept in inbox"
+            ),
+            status="needs_review",
+        )
+
+    if category == EmailCategory.NOISE:
+        return LabelDecision(
+            label=gmail_config.noise_label,
+            remove_inbox=True,
+            action=f"Applied '{gmail_config.noise_label}' label and removed from inbox",
+            status="success",
+        )
+    if category == EmailCategory.PROMOTIONAL:
+        return LabelDecision(
+            label=gmail_config.promotional_label,
+            remove_inbox=True,
+            action=f"Applied '{gmail_config.promotional_label}' label and removed from inbox",
+            status="success",
+        )
+    if category == EmailCategory.INFORMATIONAL:
+        return LabelDecision(
+            label=gmail_config.informational_label,
+            remove_inbox=True,
+            action=f"Applied '{gmail_config.informational_label}' label and removed from inbox",
+            status="success",
+        )
+    if category == EmailCategory.URGENT:
+        return LabelDecision(
+            label=gmail_config.urgent_label,
+            remove_inbox=False,
+            action=f"Applied '{gmail_config.urgent_label}' label and kept in inbox",
+            status="success",
+        )
+    if category == EmailCategory.PERSONAL:
+        return LabelDecision(
+            label=gmail_config.personal_label,
+            remove_inbox=False,
+            action=f"Applied '{gmail_config.personal_label}' label and kept in inbox",
+            status="success",
+        )
+
+    # Unknown enum value — bubbles up as an error in the agent loop.
+    raise ValueError(f"Unknown classification category: {category}")
+
 
 class EmailLabelerAgent(BaseAgent):
     """
     A Custom Agent that labels emails based on classifications.
 
-    This agent retrieves classifications from EmailClassifierAgent's agent_states and
-    applies Gmail labels to emails based on their classification:
-    - NOISE -> "Noise" label (removes from inbox)
-    - PROMOTIONAL -> "Promotions" label (removes from inbox)
-    - INFORMATIONAL -> "Newsletters" label (removes from inbox)
-    - URGENT -> "Urgent" label (stays in inbox)
-    - PERSONAL -> "Personal" label (stays in inbox)
-
-    All emails remain unread after processing.
+    Confidence threshold behavior: when ``confidence_threshold`` is set,
+    classifications with confidence below it receive the review label and
+    remain in the inbox instead of being archived to their category label.
     """
 
     def __init__(
@@ -47,6 +127,7 @@ class EmailLabelerAgent(BaseAgent):
         name: str = "EmailLabelerAgent",
         description: str | None = None,
         persist_run: PersistRunFn | None = None,
+        confidence_threshold: float | None = None,
     ):
         default_description = (
             "An agent that labels emails based on classifications and applies appropriate Gmail labels."
@@ -58,14 +139,11 @@ class EmailLabelerAgent(BaseAgent):
         self._config = config
         self._gmail_config = GmailConfig()
         self._persist_run = persist_run
+        self._confidence_threshold = confidence_threshold
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
         """
         Custom execution logic for the EmailLabeler agent.
-
-        This method retrieves accumulated classifications from session state,
-        maps them to Message objects from EmailCollectorAgent's agent_states, and
-        applies appropriate labels based on the classification.
 
         Args:
             ctx: The invocation context containing session state and user input
@@ -73,8 +151,6 @@ class EmailLabelerAgent(BaseAgent):
         Yields:
             Events containing processing results
         """
-        # Classifications are accumulated into session.state by the LoopAgent's
-        # after_agent_callback (accumulate_classifications_callback) after each iteration.
         collection_output: ClassificationCollectionOutput | None = None
         final_classifications_data = ctx.session.state.get("final_classifications")
         if final_classifications_data:
@@ -84,7 +160,6 @@ class EmailLabelerAgent(BaseAgent):
                 pass
 
         if not collection_output:
-            # No classifications found
             event = Event(
                 invocation_id=ctx.invocation_id,
                 author=self.name,
@@ -98,7 +173,6 @@ class EmailLabelerAgent(BaseAgent):
 
         classification_results = collection_output.classifications
         if not classification_results:
-            # Empty classification list
             event = Event(
                 invocation_id=ctx.invocation_id,
                 author=self.name,
@@ -108,10 +182,8 @@ class EmailLabelerAgent(BaseAgent):
             yield event
             return
 
-        # Retrieve emails from EmailCollectorAgent's agent_states
         collector_state = ctx.agent_states.get("EmailCollectorAgent")
         if not collector_state or "emails" not in collector_state:
-            # No emails found
             event = Event(
                 invocation_id=ctx.invocation_id,
                 author=self.name,
@@ -122,76 +194,53 @@ class EmailLabelerAgent(BaseAgent):
             return
 
         emails: list[Message] = collector_state["emails"]
-
-        # Create a mapping from email_id to Message object
         email_map: dict[str, Message] = {email.id: email for email in emails}
 
         gc = self._gmail_config
 
-        # Process each classification
         processing_results = []
         db_entries: list[dict] = []
-        label_counts = {
+        label_counts: dict[str, int] = {
             gc.noise_label: 0,
             gc.promotional_label: 0,
             gc.informational_label: 0,
             gc.urgent_label: 0,
             gc.personal_label: 0,
+            gc.review_label: 0,
         }
         errors = []
 
         for classification_result in classification_results:
             email_id = classification_result.email_id
             classification_category = classification_result.classification
+            confidence = classification_result.confidence
 
             if not email_id:
                 errors.append(f"Classification missing email_id: {classification_result.model_dump()}")
                 continue
 
-            # Find the corresponding Message object
             message = email_map.get(email_id)
             if not message:
                 errors.append(f"Message not found for email_id: {email_id}")
                 continue
 
-            # Apply label based on classification
             try:
-                if classification_category == EmailCategory.NOISE:
-                    apply_label_to_message(message, gc.noise_label, remove_inbox=True)
-                    apply_label_to_message(message, gc.processed_label, remove_inbox=False)
-                    label_counts[gc.noise_label] += 1
-                    action = f"Applied '{gc.noise_label}' label and removed from inbox"
-                    status = "success"
-                elif classification_category == EmailCategory.PROMOTIONAL:
-                    apply_label_to_message(message, gc.promotional_label, remove_inbox=True)
-                    apply_label_to_message(message, gc.processed_label, remove_inbox=False)
-                    label_counts[gc.promotional_label] += 1
-                    action = f"Applied '{gc.promotional_label}' label and removed from inbox"
-                    status = "success"
-                elif classification_category == EmailCategory.INFORMATIONAL:
-                    apply_label_to_message(message, gc.informational_label, remove_inbox=True)
-                    apply_label_to_message(message, gc.processed_label, remove_inbox=False)
-                    label_counts[gc.informational_label] += 1
-                    action = f"Applied '{gc.informational_label}' label and removed from inbox"
-                    status = "success"
-                elif classification_category == EmailCategory.URGENT:
-                    apply_label_to_message(message, gc.urgent_label, remove_inbox=False)
-                    apply_label_to_message(message, gc.processed_label, remove_inbox=False)
-                    label_counts[gc.urgent_label] += 1
-                    action = f"Applied '{gc.urgent_label}' label and kept in inbox"
-                    status = "success"
-                elif classification_category == EmailCategory.PERSONAL:
-                    apply_label_to_message(message, gc.personal_label, remove_inbox=False)
-                    apply_label_to_message(message, gc.processed_label, remove_inbox=False)
-                    label_counts[gc.personal_label] += 1
-                    action = f"Applied '{gc.personal_label}' label and kept in inbox"
-                    status = "success"
-                else:
-                    errors.append(
-                        f"Unknown classification category: {classification_category} for email_id: {email_id}"
-                    )
-                    action = "Unknown classification - no action taken"
-                    status = "error"
+                decision = select_label_decision(
+                    classification_category,
+                    confidence,
+                    gmail_config=gc,
+                    confidence_threshold=self._confidence_threshold,
+                )
+                apply_label_to_message(message, decision.label, remove_inbox=decision.remove_inbox)
+                apply_label_to_message(message, gc.processed_label, remove_inbox=False)
+                label_counts[decision.label] = label_counts.get(decision.label, 0) + 1
+                action = decision.action
+                status = decision.status
+            except ValueError as e:
+                # Unknown category enum value
+                errors.append(str(e))
+                action = "Unknown classification - no action taken"
+                status = "error"
             except Exception as e:
                 error_msg = f"Error processing email_id {email_id}: {str(e)}"
                 errors.append(error_msg)
@@ -224,7 +273,6 @@ class EmailLabelerAgent(BaseAgent):
                 }
             )
 
-        # Create structured output summary
         summary_output = ProcessingSummaryOutput(
             total_processed=len(processing_results),
             label_counts=label_counts,
@@ -232,7 +280,6 @@ class EmailLabelerAgent(BaseAgent):
             errors=errors if errors else None,
         )
 
-        # Persist to database asynchronously
         if self._persist_run and db_entries:
             try:
                 run_id: str = ctx.session.state.get("run_id", "unknown")
@@ -249,15 +296,16 @@ class EmailLabelerAgent(BaseAgent):
                     errors_count=summary_output.errors_count,
                     status="success" if summary_output.errors_count == 0 else "partial",
                 )
-            except Exception as e:
-                print(f"[{self.name}] Failed to persist run to database: {e}")
+            except Exception:
+                _logger.exception(
+                    "persist_run_failed",
+                    extra={"run_id": ctx.session.state.get("run_id", "unknown")},
+                )
 
-        # Store processing results in agent_states
         ctx.agent_states[self.name] = {
             "summary_output": summary_output,
         }
 
-        # Create event with structured output
         event = Event(
             invocation_id=ctx.invocation_id,
             author=self.name,
@@ -273,11 +321,24 @@ def create_email_labeler_agent(
     name: str = "EmailLabelerAgent",
     description: str | None = None,
     persist_run: PersistRunFn | None = None,
+    classifier_config: EmailClassifierConfig | None = None,
+    confidence_threshold: float | None = None,
 ) -> EmailLabelerAgent:
-    """Factory function for EmailLabelerAgent."""
+    """Factory function for EmailLabelerAgent.
+
+    ``confidence_threshold`` wins over ``classifier_config.confidence_threshold``
+    if both are supplied. If neither is given, the low-confidence branch is
+    disabled and every email is routed by category.
+    """
+    threshold = (
+        confidence_threshold
+        if confidence_threshold is not None
+        else (classifier_config.confidence_threshold if classifier_config else None)
+    )
     return EmailLabelerAgent(
         config=config or EmailLabelerConfig(),
         name=name,
         description=description,
         persist_run=persist_run,
+        confidence_threshold=threshold,
     )

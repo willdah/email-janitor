@@ -29,9 +29,9 @@ def create_root_agent(
     """
     email_collector = create_email_collector_agent(config=collector_config or EmailCollectorConfig())
 
-    email_classifier = create_email_classifier_agent(
-        config=classifier_config or EmailClassifierConfig(),
-    )
+    resolved_classifier_config = classifier_config or EmailClassifierConfig()
+
+    email_classifier = create_email_classifier_agent(config=resolved_classifier_config)
 
     email_classifier_loop = LoopAgent(
         name="EmailClassifierLoopAgent",
@@ -41,7 +41,11 @@ def create_root_agent(
         before_agent_callback=initialize_loop_state_callback,
     )
 
-    email_labeler = create_email_labeler_agent(config=labeler_config or EmailLabelerConfig(), persist_run=persist_run)
+    email_labeler = create_email_labeler_agent(
+        config=labeler_config or EmailLabelerConfig(),
+        persist_run=persist_run,
+        classifier_config=resolved_classifier_config,
+    )
 
     return SequentialAgent(
         name="EmailJanitor",

@@ -36,6 +36,7 @@ def get_classifications(
     category: str | None = None,
     max_confidence: float | None = None,
     hide_corrected: bool = False,
+    status: str | None = None,
 ) -> list[dict]:
     """Return classifications with optional filters, joined with latest correction."""
     query = """
@@ -65,6 +66,9 @@ def get_classifications(
         params.append(max_confidence)
     if hide_corrected:
         query += " AND cr.corrected_classification IS NULL"
+    if status:
+        query += " AND c.status = ?"
+        params.append(status)
 
     query += " ORDER BY c.classified_at DESC"
 

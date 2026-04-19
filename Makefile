@@ -1,7 +1,7 @@
 IMAGE ?= willahern/email-janitor
 TAG ?= latest
 
-.PHONY: install run corrections lint format test clean auth docker-build docker-push
+.PHONY: install run corrections eval eval-seed lint format test clean auth docker-build docker-push
 
 install:
 	uv sync --group dev
@@ -11,6 +11,12 @@ run:
 
 corrections:
 	uv run streamlit run src/email_janitor/corrections/app.py
+
+eval:
+	uv run python -m email_janitor.eval --progress
+
+eval-seed:
+	uv run python -m email_janitor.eval.seed_golden --db $${DATABASE_PATH:-email_janitor.db}
 
 lint:
 	uv run ruff check .
