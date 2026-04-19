@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/willdah/email-janitor/security/advisories/new
+    about: Please report security issues privately via GitHub Security.
+  - name: Discussions
+    url: https://github.com/willdah/email-janitor/discussions
+    about: For questions and general discussion, use GitHub Discussions.
