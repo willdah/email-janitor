@@ -49,6 +49,11 @@ max_confidence = st.sidebar.slider("Max confidence", min_value=1.0, max_value=5.
 max_confidence_filter = max_confidence if max_confidence < 5.0 else None
 
 hide_corrected = st.sidebar.checkbox("Hide already corrected", value=False)
+needs_review_only = st.sidebar.checkbox(
+    "Needs review only",
+    value=False,
+    help="Show only classifications flagged as low-confidence (applied janitor/review label).",
+)
 
 # ---------------------------------------------------------------------------
 # Load classifications
@@ -59,6 +64,7 @@ rows = get_classifications(
     category=selected_category,
     max_confidence=max_confidence_filter,
     hide_corrected=hide_corrected,
+    status="needs_review" if needs_review_only else None,
 )
 
 # ---------------------------------------------------------------------------

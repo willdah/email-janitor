@@ -21,6 +21,7 @@ from ..callbacks.callbacks import cleanup_llm_json_callback
 from ..config import EmailClassifierConfig
 from ..corrections.relevance import select_relevant_corrections
 from ..instructions.email_classifier_agent import build_instruction
+from ..observability import get_logger, get_tracer
 from ..schemas.schemas import (
     ClassificationCollectionOutput,
     ClassificationResult,
@@ -29,6 +30,10 @@ from ..schemas.schemas import (
     EmailClassificationOutput,
     EmailCollectionOutput,
 )
+from ..utils.html_strip import looks_like_html, strip_html
+
+_logger = get_logger(__name__)
+_tracer = get_tracer(__name__)
 
 
 class EmailClassifierAgent(BaseAgent):
@@ -57,7 +62,11 @@ class EmailClassifierAgent(BaseAgent):
         )
         self._config = config
         self._classifier = Agent(
-            model=LiteLlm(model=config.model),
+            model=LiteLlm(
+                model=config.model,
+                num_retries=config.llm_num_retries,
+                timeout=config.llm_timeout_seconds,
+            ),
             name=f"{name}_LLM",
             instruction=self._build_instruction,
             output_schema=EmailClassificationOutput,
@@ -130,43 +139,76 @@ class EmailClassifierAgent(BaseAgent):
 
         email_data = collection_output.emails[current_index]
 
-        # Stash the full email body in session state so _build_instruction can read it.
-        # agent_states is not accessible from the LLM Agent's instruction callable.
-        emails: list[Message] | None = collector_state.get("emails")
-        email_body = None
-        if emails:
-            for msg in emails:
-                if msg.id == email_data.id:
-                    try:
-                        email_body = msg.plain or msg.html or email_data.snippet
-                    except Exception:
-                        email_body = email_data.snippet
-                    break
-        ctx.session.state["current_email_body"] = email_body
+        with _tracer.start_as_current_span("classify_email") as span:
+            span.set_attribute("email.id", email_data.id)
+            span.set_attribute("email.sender", email_data.sender)
+            run_id = ctx.session.state.get("run_id", "unknown")
+            span.set_attribute("run_id", run_id)
 
-        # Delegate to the pre-built LLM classifier, forwarding all events upstream
-        classification_result = None
-        async for event in self._classifier.run_async(ctx):
-            yield event
-            if event.is_final_response() and event.content and event.content.parts:
-                raw_text = event.content.parts[0].text or ""
-                try:
-                    match = re.search(r"\{.*\}", raw_text, re.DOTALL)
-                    output = EmailClassificationOutput.model_validate_json(match.group(0) if match else raw_text)
-                except Exception:
-                    output = EmailClassificationOutput(
-                        category=EmailCategory.NOISE,
-                        reasoning="Parsing error",
-                        confidence=1.0,
+            # Stash the full email body in session state so _build_instruction can read it.
+            # agent_states is not accessible from the LLM Agent's instruction callable.
+            emails: list[Message] | None = collector_state.get("emails")
+            email_body = None
+            if emails:
+                for msg in emails:
+                    if msg.id == email_data.id:
+                        try:
+                            if msg.plain:
+                                email_body = (
+                                    strip_html(msg.plain) if looks_like_html(msg.plain) else msg.plain
+                                )
+                            elif msg.html:
+                                email_body = strip_html(msg.html)
+                            else:
+                                email_body = email_data.snippet
+                        except Exception:
+                            email_body = email_data.snippet
+                        break
+            ctx.session.state["current_email_body"] = email_body
+
+            # Delegate to the pre-built LLM classifier, forwarding all events upstream
+            classification_result = None
+            parse_failed = False
+            async for event in self._classifier.run_async(ctx):
+                yield event
+                if event.is_final_response() and event.content and event.content.parts:
+                    raw_text = event.content.parts[0].text or ""
+                    try:
+                        match = re.search(r"\{.*\}", raw_text, re.DOTALL)
+                        output = EmailClassificationOutput.model_validate_json(
+                            match.group(0) if match else raw_text
+                        )
+                    except Exception:
+                        output = EmailClassificationOutput(
+                            category=EmailCategory.NOISE,
+                            reasoning="Parsing error",
+                            confidence=1.0,
+                        )
+                        parse_failed = True
+                    classification_result = ClassificationResult(
+                        email_id=email_data.id,
+                        sender=email_data.sender,
+                        subject=email_data.subject,
+                        classification=output.category,
+                        reasoning=output.reasoning,
+                        confidence=output.confidence,
+                        refinement_count=0,
                     )
-                classification_result = ClassificationResult(
-                    email_id=email_data.id,
-                    sender=email_data.sender,
-                    subject=email_data.subject,
-                    classification=output.category,
-                    reasoning=output.reasoning,
-                    confidence=output.confidence,
-                    refinement_count=0,
+
+            if classification_result:
+                span.set_attribute("predicted_category", classification_result.classification.value)
+                span.set_attribute("confidence", classification_result.confidence)
+                span.set_attribute("parse_failed", parse_failed)
+                _logger.info(
+                    "email_classified",
+                    extra={
+                        "run_id": run_id,
+                        "email_id": email_data.id,
+                        "sender": email_data.sender,
+                        "category": classification_result.classification.value,
+                        "confidence": classification_result.confidence,
+                        "parse_failed": parse_failed,
+                    },
                 )
 
         # Accumulate result into session state and advance the index.

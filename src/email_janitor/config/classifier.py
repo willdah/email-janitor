@@ -21,3 +21,13 @@ class EmailClassifierConfig(BaseSettings):
         default="ollama_chat/llama3.1:8b",
         description="LiteLLM model identifier to use for classification",
     )
+    llm_timeout_seconds: float = Field(
+        default=30.0,
+        gt=0,
+        description="Hard timeout (seconds) per LLM call. Exceeding this counts as a retryable failure.",
+    )
+    llm_num_retries: int = Field(
+        default=3,
+        ge=0,
+        description="Built-in LiteLLM retry count for transient LLM errors (timeouts, 5xx, connection).",
+    )

@@ -489,6 +489,7 @@ dependencies = [
     { name = "simplegmail" },
     { name = "sqlite-utils" },
     { name = "streamlit" },
+    { name = "tenacity" },
 ]
 
 [package.dev-dependencies]
@@ -509,6 +510,7 @@ requires-dist = [
     { name = "simplegmail", specifier = ">=4.1.1" },
     { name = "sqlite-utils", specifier = ">=3.39" },
     { name = "streamlit", specifier = ">=1.45.0" },
+    { name = "tenacity", specifier = ">=9.1.2" },
 ]
 
 [package.metadata.requires-dev]
